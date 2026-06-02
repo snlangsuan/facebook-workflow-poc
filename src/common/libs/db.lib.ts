@@ -247,7 +247,14 @@ export const dbService = {
     postId: string,
     senderName: string,
     text: string,
-    opts?: { id?: string; parentId?: string | null; status?: 'sent' | 'failed'; error?: string; avatarUrl?: string },
+    opts?: {
+      id?: string
+      parentId?: string | null
+      status?: 'sent' | 'failed'
+      error?: string
+      avatarUrl?: string
+      timestamp?: string
+    },
   ): Promise<IComment | null> => {
     const ref = rtdb.ref(`posts/${postId}`)
     const snapshot = await ref.once('value')
@@ -260,7 +267,7 @@ export const dbService = {
       id: opts?.id || `comment_${getUtcTime().valueOf()}`,
       senderName,
       text,
-      timestamp: formatToIso(),
+      timestamp: opts?.timestamp ? formatToIso(opts.timestamp) : formatToIso(),
       parentId: opts?.parentId ?? null,
       ...(opts?.avatarUrl ? { avatarUrl: opts.avatarUrl } : {}),
       ...(opts?.status ? { status: opts.status } : {}),

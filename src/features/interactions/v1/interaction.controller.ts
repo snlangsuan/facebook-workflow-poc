@@ -197,6 +197,22 @@ export const interactionController = {
     return c.json(successResponseSchema.parse({ success: true }))
   },
 
+  syncPost: async <E extends Env, P extends string, I extends Input & ParamInputSchema<TPostParamPayload>>(
+    c: Context<E, P, I>,
+  ) => {
+    const { id } = c.req.valid('param')
+    try {
+      const post = await interactionService.syncPost(id)
+      if (!post) {
+        return c.json({ success: false, error: 'Post not found' }, 404)
+      }
+      return c.json(post)
+    } catch (error) {
+      const err = error as Error
+      return c.json({ success: false, error: err.message || 'Sync failed' }, 400)
+    }
+  },
+
   replyToComment: async <E extends Env, P extends string, I extends Input & JsonInputSchema<TCommentReplyPayload>>(
     c: Context<E, P, I>,
   ) => {

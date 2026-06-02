@@ -207,6 +207,61 @@ async function sendCommentReply(pageAccessToken: string, targetId: string, text:
   }
 }
 
+interface IGraphComment {
+  id: string
+  from?: { name?: string; picture?: { data?: { url?: string } } }
+  message?: string
+  parent?: { id?: string }
+  created_time?: string
+}
+
+// Safety cap so a runaway loop can't page forever (100 pages x 100 = up to 10k comments).
+const COMMENT_PAGE_CAP = 100
+
+/**
+ * Fetch ALL of a post's comments and replies from the Graph API (paginated, using
+ * filter=stream which flattens replies with a `parent`), and merge any we don't already
+ * have into the local post (deduped by comment id). Used by import and the Sync action.
+ */
+async function syncPostComments(postId: string, conn: IFbPageConnection): Promise<void> {
+  const post = await interactionRepository.getPost(postId)
+  const existing = new Set((post?.comments ?? []).map((c) => c.id))
+
+  let next: string | null =
+    `${GRAPH}/${postId}/comments?filter=stream&` +
+    `fields=id,from{name,id,picture{url}},message,created_time,parent&limit=100&access_token=${conn.accessToken}`
+
+  for (let page = 0; next && page < COMMENT_PAGE_CAP; page++) {
+    const res = await fetch(next)
+    const data = (await res.json()) as {
+      error?: { message?: string }
+      data?: IGraphComment[]
+      paging?: { next?: string }
+    }
+    if (!res.ok || data.error) {
+      // Fail loudly only if we couldn't read anything at all.
+      if (page === 0) {
+        throw new Error(data.error?.message || 'Could not fetch comments from Facebook.')
+      }
+      break
+    }
+
+    for (const cm of data.data ?? []) {
+      if (!cm.message || existing.has(cm.id)) {
+        continue
+      }
+      existing.add(cm.id)
+      await dbService.addComment(postId, cm.from?.name || 'User', cm.message, {
+        id: cm.id,
+        parentId: cm.parent?.id ?? null,
+        avatarUrl: cm.from?.picture?.data?.url,
+        timestamp: cm.created_time,
+      })
+    }
+    next = data.paging?.next ?? null
+  }
+}
+
 export const interactionService = {
   async listConversations(): Promise<IConversation[]> {
     return interactionRepository.listConversations()
@@ -322,23 +377,15 @@ export const interactionService = {
 
     const postId = await resolveImportPostId(input, conn)
 
-    const url =
-      `${GRAPH}/${postId}?fields=from,message,full_picture,created_time,` +
-      `comments.limit(100){id,from{name,id,picture{url}},message,created_time,parent}&access_token=${conn.accessToken}`
-    const res = await fetch(url)
+    // Fetch post metadata (for ownership check + content).
+    const res = await fetch(
+      `${GRAPH}/${postId}?fields=from,message,full_picture,created_time&access_token=${conn.accessToken}`,
+    )
     const data = (await res.json()) as {
       error?: { message?: string }
       from?: { id?: string; name?: string }
       message?: string
       full_picture?: string
-      comments?: {
-        data?: Array<{
-          id: string
-          from?: { name?: string; picture?: { data?: { url?: string } } }
-          message?: string
-          parent?: { id?: string }
-        }>
-      }
     }
     if (!res.ok || data.error) {
       logger.error(data.error ?? data, 'Failed to import post from Graph API')
@@ -350,33 +397,42 @@ export const interactionService = {
       throw new Error('This post does not belong to the selected page.')
     }
 
-    // Upsert the post.
-    let post = await interactionRepository.getPost(postId)
-    if (!post) {
-      post = await interactionRepository.addPost({
+    // Upsert the post, then sync its comments + replies.
+    const existing = await interactionRepository.getPost(postId)
+    if (!existing) {
+      await interactionRepository.addPost({
         content: data.message || '(no text)',
         imageUrl: data.full_picture || null,
         postId,
         pageId: conn.id,
       })
     }
-
-    // Add only comments we don't already have.
-    const existingIds = new Set((post.comments || []).map((c) => c.id))
-    for (const cm of data.comments?.data ?? []) {
-      if (!cm.message || existingIds.has(cm.id)) {
-        continue
-      }
-      await dbService.addComment(postId, cm.from?.name || 'User', cm.message, {
-        id: cm.id,
-        parentId: cm.parent?.id ?? null,
-        avatarUrl: cm.from?.picture?.data?.url,
-      })
-    }
+    await syncPostComments(postId, conn)
 
     const updated = (await interactionRepository.getPost(postId)) as IPost
     sseBroker.broadcast('posts_updated', updated)
     sseBroker.broadcast('post_updated', updated)
+    return updated
+  },
+
+  /**
+   * Re-sync an already-imported post: pull the latest comments and replies from
+   * Facebook and merge new ones in. Returns null if the post isn't in the system.
+   */
+  async syncPost(id: string): Promise<IPost | null> {
+    const post = await interactionRepository.getPost(id)
+    if (!post) {
+      return null
+    }
+    const conn = await resolveConnection(post.pageId)
+    if (!conn?.accessToken) {
+      throw new Error('No connected page with a valid access token')
+    }
+    await syncPostComments(id, conn)
+
+    const updated = (await interactionRepository.getPost(id)) as IPost
+    sseBroker.broadcast('post_updated', updated)
+    sseBroker.broadcast('posts_updated', updated)
     return updated
   },
 

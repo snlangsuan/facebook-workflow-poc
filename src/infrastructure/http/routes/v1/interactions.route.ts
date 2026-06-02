@@ -15,6 +15,7 @@ import {
   replyToCommentSpec,
   importPostSpec,
   deletePostSpec,
+  syncPostSpec,
 } from '#/features/interactions/v1/interaction.openapi'
 import {
   webhookVerifyQuerySchema,
@@ -85,6 +86,14 @@ interactionsRouter.delete(
   authMiddleware(),
   zValidator('param', postParamPayloadSchema),
   interactionController.deletePost,
+)
+
+interactionsRouter.post(
+  '/posts/:id/sync',
+  syncPostSpec,
+  authMiddleware(),
+  zValidator('param', postParamPayloadSchema),
+  interactionController.syncPost,
 )
 
 interactionsRouter.post(

@@ -10,6 +10,15 @@ export const verifyWebhookSpec = describeRoute({
   },
 })
 
+export const syncPostSpec = describeRoute({
+  tags: ['Interactions'],
+  summary: 'Re-sync a post\'s comments and replies from Facebook',
+  responses: {
+    200: { description: 'Post synced' },
+    404: { description: 'Post not found' },
+  },
+})
+
 export const deletePostSpec = describeRoute({
   tags: ['Interactions'],
   summary: 'Delete a post (and its comments) from the dashboard',
