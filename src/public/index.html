@@ -88,7 +88,8 @@
   </div>
 
   <div class="fixed inset-0 bg-[#0b0d11]/95 flex items-center justify-center z-40 transition-opacity duration-300" id="wizardOverlay" style="display: none;">
-    <div class="w-[460px] bg-[#14171d] border border-white/10 rounded-2xl p-8 flex flex-col gap-5 shadow-2xl">
+    <div class="w-[460px] bg-[#14171d] border border-white/10 rounded-2xl p-8 flex flex-col gap-5 shadow-2xl relative">
+      <button onclick="closeWizard()" title="Close" class="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-200 hover:bg-white/[0.06] transition-colors text-lg leading-none">✕</button>
       <div class="flex flex-col gap-1.5">
         <div class="w-10 h-10 bg-[#1877F2] rounded-xl flex items-center justify-center text-white mb-3">
           <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
@@ -179,7 +180,7 @@
           <img src="https://api.dicebear.com/7.x/identicon/svg?seed=page" class="w-7 h-7 rounded-md" alt="Page">
           <div class="min-w-0">
             <h3 class="text-[13px] font-semibold truncate text-slate-100" id="connectedPageName">Loading…</h3>
-            <p class="text-[11px] text-emerald-400/90 mt-0.5 flex items-center gap-1.5">
+            <p class="text-[11px] text-emerald-400/90 mt-0.5 flex items-center gap-1.5" id="connectedStatus">
               <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
               Connected
             </p>
@@ -229,7 +230,7 @@
         <svg class="w-12 h-12 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
         </svg>
-        <p class="text-sm text-slate-500">Select a conversation or post to get started</p>
+        <p class="text-sm text-slate-500" id="emptyStateText">Select a conversation or post to get started</p>
       </div>
     </div>
 
@@ -437,15 +438,13 @@
         const res = await apiFetch(`/api/v1/connections/${currentUserId}`);
         const list = res.ok ? await res.json() : [];
         connectedPages = Array.isArray(list) ? list : [];
-        if (connectedPages.length > 0) {
-          connectedPage = connectedPages[0];
-          setupDashboard();
-        } else {
-          showPageConnectionWizard();
-        }
       } catch (error) {
-        showPageConnectionWizard();
+        connectedPages = [];
       }
+      // Always enter the dashboard — no page connected is a valid (empty) state.
+      // Facebook login only happens when the user clicks "+ Add page".
+      connectedPage = connectedPages[0] || null;
+      setupDashboard();
     }
 
     function showPageConnectionWizard() {
@@ -453,6 +452,10 @@
       document.getElementById('wizardOverlay').style.display = 'flex';
       const container = document.getElementById('fbPagesList');
       container.innerHTML = '<div class="text-center text-slate-400 text-sm">Please log in to Facebook above.</div>';
+    }
+
+    function closeWizard() {
+      document.getElementById('wizardOverlay').style.display = 'none';
     }
 
     function handleFacebookLogin() {
@@ -565,14 +568,38 @@
     function setupDashboard() {
       updatePageBadge();
       renderPageNav();
-      switchTab(activeTab || 'inbox');
+      if (connectedPage) {
+        switchTab(activeTab || 'inbox');
+      } else {
+        showNoPageState();
+      }
       initializeRealtimeStream();
     }
 
     function updatePageBadge() {
-      if (!connectedPage) return;
-      document.getElementById('connectedPageName').innerText = connectedPage.name;
-      document.getElementById('connectedPageBadge').querySelector('img').src = `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(connectedPage.name)}`;
+      const nameEl = document.getElementById('connectedPageName');
+      const imgEl = document.getElementById('connectedPageBadge').querySelector('img');
+      const statusEl = document.getElementById('connectedStatus');
+      if (!connectedPage) {
+        nameEl.innerText = 'No page connected';
+        imgEl.src = 'https://api.dicebear.com/7.x/identicon/svg?seed=none';
+        statusEl.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span> Not connected';
+        statusEl.className = 'text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5';
+        return;
+      }
+      nameEl.innerText = connectedPage.name;
+      imgEl.src = `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(connectedPage.name)}`;
+      statusEl.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Connected';
+      statusEl.className = 'text-[11px] text-emerald-400/90 mt-0.5 flex items-center gap-1.5';
+    }
+
+    function showNoPageState() {
+      document.getElementById('listTitle').innerText = 'Conversations';
+      document.getElementById('listContent').innerHTML = '';
+      const openDetail = document.getElementById('openDetailContainer');
+      if (openDetail) openDetail.remove();
+      document.getElementById('emptyWorkspaceState').style.display = 'flex';
+      document.getElementById('emptyStateText').innerText = 'Connect a Facebook Page to get started — click “+ Add page”.';
     }
 
     const INBOX_ICON = '<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>';
@@ -581,6 +608,10 @@
     function renderPageNav() {
       const nav = document.getElementById('pageNav');
       if (!nav) return;
+      if (connectedPages.length === 0) {
+        nav.innerHTML = '<p class="px-2 text-[11px] text-slate-500 leading-relaxed">No pages connected yet.<br>Click <span class="text-indigo-300 font-medium">+ Add page</span> to connect one.</p>';
+        return;
+      }
       nav.innerHTML = connectedPages.map((p) => {
         const isActivePage = connectedPage && connectedPage.id === p.id;
         const subItem = (tab, label, icon) => {
@@ -755,6 +786,7 @@
       selectedActiveId = null;
 
       document.getElementById('emptyWorkspaceState').style.display = 'flex';
+      document.getElementById('emptyStateText').innerText = 'Select a conversation or post to get started';
       const openDetail = document.getElementById('openDetailContainer');
       if (openDetail) openDetail.remove();
 
