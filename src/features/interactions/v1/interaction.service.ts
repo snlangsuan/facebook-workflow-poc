@@ -307,6 +307,11 @@ export const interactionService = {
     return interactionRepository.getPost(id)
   },
 
+  async deletePost(id: string): Promise<void> {
+    await interactionRepository.deletePost(id)
+    sseBroker.broadcast('posts_updated', { id, deleted: true })
+  },
+
   /**
    * Import a post by Facebook URL (or post id) using the Graph API: fetches the post
    * content and its comments, then stores them locally (deduped). Lets admins pull a

@@ -14,6 +14,7 @@ import {
   getPostSpec,
   replyToCommentSpec,
   importPostSpec,
+  deletePostSpec,
 } from '#/features/interactions/v1/interaction.openapi'
 import {
   webhookVerifyQuerySchema,
@@ -76,6 +77,14 @@ interactionsRouter.get(
   authMiddleware(),
   zValidator('param', postParamPayloadSchema),
   interactionController.getPost,
+)
+
+interactionsRouter.delete(
+  '/posts/:id',
+  deletePostSpec,
+  authMiddleware(),
+  zValidator('param', postParamPayloadSchema),
+  interactionController.deletePost,
 )
 
 interactionsRouter.post(

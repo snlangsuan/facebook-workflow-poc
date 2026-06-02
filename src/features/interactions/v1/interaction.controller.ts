@@ -189,6 +189,14 @@ export const interactionController = {
     return c.json(post)
   },
 
+  deletePost: async <E extends Env, P extends string, I extends Input & ParamInputSchema<TPostParamPayload>>(
+    c: Context<E, P, I>,
+  ) => {
+    const { id } = c.req.valid('param')
+    await interactionService.deletePost(id)
+    return c.json(successResponseSchema.parse({ success: true }))
+  },
+
   replyToComment: async <E extends Env, P extends string, I extends Input & JsonInputSchema<TCommentReplyPayload>>(
     c: Context<E, P, I>,
   ) => {

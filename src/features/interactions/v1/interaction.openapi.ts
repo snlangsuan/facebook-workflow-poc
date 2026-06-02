@@ -10,6 +10,14 @@ export const verifyWebhookSpec = describeRoute({
   },
 })
 
+export const deletePostSpec = describeRoute({
+  tags: ['Interactions'],
+  summary: 'Delete a post (and its comments) from the dashboard',
+  responses: {
+    200: { description: 'Post deleted' },
+  },
+})
+
 export const importPostSpec = describeRoute({
   tags: ['Interactions'],
   summary: 'Import a Facebook post (and its comments) by URL or id',

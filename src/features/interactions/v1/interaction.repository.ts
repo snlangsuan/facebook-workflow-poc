@@ -33,6 +33,10 @@ export const interactionRepository = {
     return post || null
   },
 
+  async deletePost(id: string): Promise<void> {
+    await dbService.deletePost(id)
+  },
+
   async addPost(payload: TCustomerPostPayload): Promise<IPost> {
     return await dbService.addPost(payload.content, payload.imageUrl, {
       id: payload.postId,

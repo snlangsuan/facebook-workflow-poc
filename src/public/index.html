@@ -1073,6 +1073,27 @@
       } catch (err) {}
     }
 
+    async function deletePost(id) {
+      const ok = await showConfirmDialog(
+        'Delete Post',
+        'Remove this post and its comments from the dashboard?\nThis does not delete the post on Facebook.',
+        'Delete'
+      );
+      if (!ok) return;
+      try {
+        const res = await apiFetch(`/api/v1/interactions/posts/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Failed to delete the post.');
+        selectedActiveId = null;
+        const openDetail = document.getElementById('openDetailContainer');
+        if (openDetail) openDetail.remove();
+        document.getElementById('emptyWorkspaceState').style.display = 'flex';
+        document.getElementById('emptyStateText').innerText = 'Select a conversation or post to get started';
+        fetchPostsList(false);
+      } catch (e) {
+        showAlertDialog('Delete Failed', e.message);
+      }
+    }
+
     function renderOpenPost(post) {
       document.getElementById('emptyWorkspaceState').style.display = 'none';
       let container = document.getElementById('openDetailContainer');
@@ -1146,10 +1167,13 @@
         <div class="p-6 border-b border-slate-800/85 bg-slate-950/5">
           <div class="flex items-center gap-3.5 mb-4">
             <img src="https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(connectedPage ? connectedPage.name : 'FB')}" class="w-9 h-9 rounded-lg">
-            <div>
+            <div class="flex-1 min-w-0">
               <h4 class="text-sm font-semibold">${connectedPage ? connectedPage.name : 'Page'}</h4>
               <span class="text-[10px] text-slate-400">Published on ${dateStr}</span>
             </div>
+            <button onclick="deletePost('${post.id}')" title="Delete post" class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            </button>
           </div>
           <p class="text-sm text-slate-200 leading-relaxed">${post.content}</p>
           ${imgTag}

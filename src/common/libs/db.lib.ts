@@ -221,6 +221,10 @@ export const dbService = {
     return (snapshot.val() as IPost | null) || undefined
   },
 
+  deletePost: async (id: string): Promise<void> => {
+    await rtdb.ref(`posts/${id}`).remove()
+  },
+
   addPost: async (
     content: string,
     imageUrl: string | null,
