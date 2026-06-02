@@ -10,9 +10,18 @@ export const verifyWebhookSpec = describeRoute({
   },
 })
 
+export const hideCommentSpec = describeRoute({
+  tags: ['Interactions'],
+  summary: 'Hide or unhide a comment (is_hidden)',
+  responses: {
+    200: { description: 'Comment visibility updated' },
+    404: { description: 'Comment not found' },
+  },
+})
+
 export const syncPostSpec = describeRoute({
   tags: ['Interactions'],
-  summary: 'Re-sync a post\'s comments and replies from Facebook',
+  summary: "Re-sync a post's comments and replies from Facebook",
   responses: {
     200: { description: 'Post synced' },
     404: { description: 'Post not found' },

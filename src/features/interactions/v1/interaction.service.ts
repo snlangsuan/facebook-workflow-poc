@@ -534,6 +534,30 @@ export const interactionService = {
     }
   },
 
+  /**
+   * Hide/unhide a comment via the Graph API (is_hidden). A hidden comment is invisible
+   * to the public but still visible to the Page admin. Also updates the local copy.
+   */
+  async hideComment(postId: string, commentId: string, hidden: boolean): Promise<IPost | null> {
+    const post = await interactionRepository.getPost(postId)
+    const conn = await resolveConnection(post?.pageId)
+    if (conn?.accessToken) {
+      const res = await fetch(`${GRAPH}/${commentId}?is_hidden=${hidden}&access_token=${conn.accessToken}`, {
+        method: 'POST',
+      })
+      if (!res.ok) {
+        const err = (await res.json()) as unknown as Record<string, unknown>
+        logger.error(err, 'Failed to toggle comment visibility')
+        throw new Error(`Could not ${hidden ? 'hide' : 'unhide'} the comment on Facebook.`)
+      }
+    }
+    const updated = await dbService.setCommentHidden(postId, commentId, hidden)
+    if (updated) {
+      sseBroker.broadcast('post_updated', updated)
+    }
+    return updated ?? null
+  },
+
   async replyToComment(payload: TCommentReplyPayload): Promise<IComment | null> {
     const post = await interactionRepository.getPost(payload.postId)
     const conn = await resolveConnection(post?.pageId)

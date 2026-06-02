@@ -17,6 +17,7 @@ import type {
   TPostParamPayload,
   TCommentReplyPayload,
   TImportPostPayload,
+  THideCommentPayload,
 } from '#/features/interactions/v1/interaction.type'
 import type { Context, Env, Input } from 'hono'
 
@@ -210,6 +211,22 @@ export const interactionController = {
     } catch (error) {
       const err = error as Error
       return c.json({ success: false, error: err.message || 'Sync failed' }, 400)
+    }
+  },
+
+  hideComment: async <E extends Env, P extends string, I extends Input & JsonInputSchema<THideCommentPayload>>(
+    c: Context<E, P, I>,
+  ) => {
+    const { postId, commentId, hidden } = c.req.valid('json')
+    try {
+      const post = await interactionService.hideComment(postId, commentId, hidden)
+      if (!post) {
+        return c.json({ success: false, error: 'Comment not found' }, 404)
+      }
+      return c.json(post)
+    } catch (error) {
+      const err = error as Error
+      return c.json({ success: false, error: err.message || 'Failed to update comment visibility' }, 400)
     }
   },
 

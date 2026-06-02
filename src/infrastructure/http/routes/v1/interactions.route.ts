@@ -16,6 +16,7 @@ import {
   importPostSpec,
   deletePostSpec,
   syncPostSpec,
+  hideCommentSpec,
 } from '#/features/interactions/v1/interaction.openapi'
 import {
   webhookVerifyQuerySchema,
@@ -24,6 +25,7 @@ import {
   postParamPayloadSchema,
   commentReplyPayloadSchema,
   importPostPayloadSchema,
+  hideCommentPayloadSchema,
 } from '#/features/interactions/v1/interaction.schema'
 
 export const interactionsRouter = new Hono()
@@ -102,4 +104,12 @@ interactionsRouter.post(
   authMiddleware(),
   zValidator('json', commentReplyPayloadSchema),
   interactionController.replyToComment,
+)
+
+interactionsRouter.post(
+  '/comments/hide',
+  hideCommentSpec,
+  authMiddleware(),
+  zValidator('json', hideCommentPayloadSchema),
+  interactionController.hideComment,
 )

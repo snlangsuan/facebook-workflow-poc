@@ -18,6 +18,12 @@ export const commentReplyPayloadSchema = z.object({
   commentId: z.string().optional(),
 })
 
+export const hideCommentPayloadSchema = z.object({
+  postId: z.string().min(1),
+  commentId: z.string().min(1),
+  hidden: z.boolean(),
+})
+
 export const customerMessagePayloadSchema = z.object({
   senderId: z.string().min(1),
   senderName: z.string().min(1),

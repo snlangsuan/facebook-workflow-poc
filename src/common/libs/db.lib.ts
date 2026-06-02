@@ -44,6 +44,7 @@ export interface IComment {
   parentId?: string | null
   status?: 'sent' | 'failed'
   error?: string
+  hidden?: boolean
 }
 
 export interface IPost {
@@ -280,6 +281,21 @@ export const dbService = {
     post.comments.push(comment)
     await ref.set(post)
     return comment
+  },
+
+  setCommentHidden: async (postId: string, commentId: string, hidden: boolean): Promise<IPost | undefined> => {
+    const ref = rtdb.ref(`posts/${postId}`)
+    const post = (await ref.once('value')).val() as IPost | null
+    if (!post?.comments) {
+      return undefined
+    }
+    const target = post.comments.find((c) => c.id === commentId)
+    if (!target) {
+      return undefined
+    }
+    target.hidden = hidden
+    await ref.set(post)
+    return post
   },
 
   setPostAutoStatus: async (postId: string, status: TAutoReplyStatus, error?: string): Promise<IPost | undefined> => {
