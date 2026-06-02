@@ -21,29 +21,55 @@ import type {
 } from '#/features/interactions/v1/interaction.type'
 import type { Context, Env, Input } from 'hono'
 
+interface ISignatureResult {
+  valid: boolean
+  reason: string
+  expectedPrefix?: string
+  receivedPrefix?: string
+}
+
 /**
  * Validate the Facebook webhook payload signature (`X-Hub-Signature-256`).
  * Computes HMAC-SHA256 of the raw body with the app secret and compares in
- * constant time. When the app secret is not configured (demo mode), validation
- * is skipped so the POC remains runnable.
+ * constant time. Returns detail for debugging. When the app secret is not
+ * configured (demo mode), validation is skipped so the POC remains runnable.
  */
-function isValidSignature(rawBody: string, signatureHeader?: string): boolean {
+function checkSignature(rawBody: string, signatureHeader?: string): ISignatureResult {
   const appSecret = envVariables.FACEBOOK_APP_SECRET
   if (!appSecret || appSecret === '<secret>') {
-    logger.warn('FACEBOOK_APP_SECRET not configured; skipping webhook signature validation')
-    return true
+    return { valid: true, reason: 'skipped (app secret not configured)' }
   }
   if (!signatureHeader || !signatureHeader.startsWith('sha256=')) {
-    return false
+    return { valid: false, reason: 'missing or malformed X-Hub-Signature-256 header' }
   }
   const expected = crypto.createHmac('sha256', appSecret).update(rawBody).digest('hex')
   const received = signatureHeader.slice('sha256='.length)
   const expectedBuf = Buffer.from(expected, 'hex')
   const receivedBuf = Buffer.from(received, 'hex')
-  if (expectedBuf.length !== receivedBuf.length) {
-    return false
+  const detail = { expectedPrefix: expected.slice(0, 12), receivedPrefix: received.slice(0, 12) }
+  if (expectedBuf.length !== receivedBuf.length || !crypto.timingSafeEqual(expectedBuf, receivedBuf)) {
+    return { valid: false, reason: 'signature mismatch (check FACEBOOK_APP_SECRET)', ...detail }
   }
-  return crypto.timingSafeEqual(expectedBuf, receivedBuf)
+  return { valid: true, reason: 'ok', ...detail }
+}
+
+/** Summarise a webhook payload for quick log scanning. */
+function summarizeWebhook(body: unknown): Record<string, unknown> {
+  const b = body as { object?: string; entry?: Array<Record<string, unknown>> } | null
+  if (!b?.entry) {
+    return { object: b?.object, entries: 0 }
+  }
+  const events: string[] = []
+  for (const entry of b.entry) {
+    const pageId = entry.id
+    for (const m of (entry.messaging as Array<{ message?: { text?: string } }>) ?? []) {
+      events.push(`message("${m.message?.text ?? ''}")@${pageId}`)
+    }
+    for (const ch of (entry.changes as Array<{ field?: string; value?: { item?: string; verb?: string } }>) ?? []) {
+      events.push(`${ch.field}:${ch.value?.item}:${ch.value?.verb}@${pageId}`)
+    }
+  }
+  return { object: b.object, entries: b.entry.length, events }
 }
 
 export const interactionController = {
@@ -56,29 +82,50 @@ export const interactionController = {
     const challenge = query['hub.challenge']
 
     const expectedToken = process.env.FACEBOOK_VERIFY_TOKEN || 'facebook_verify_token_123'
+    const tokenMatch = token === expectedToken
 
-    if (mode === 'subscribe' && token === expectedToken) {
+    logger.info({ mode, tokenMatch, hasChallenge: !!challenge }, '🔑 [WEBHOOK] verification request (GET)')
+
+    if (mode === 'subscribe' && tokenMatch) {
       return c.text(challenge || '')
     }
+    logger.warn({ mode, receivedToken: token, expectedToken }, '❌ [WEBHOOK] verification FAILED')
     return c.text('Forbidden', 403)
   },
 
   receiveWebhook: async <E extends Env, P extends string, I extends Input>(c: Context<E, P, I>) => {
     // Read the raw body so the X-Hub-Signature-256 can be verified against the exact bytes.
     const rawBody = await c.req.text()
+    const sigHeader = c.req.header('x-hub-signature-256')
+    const sig = checkSignature(rawBody, sigHeader)
 
-    if (!isValidSignature(rawBody, c.req.header('x-hub-signature-256'))) {
-      logger.warn('Rejected webhook with invalid X-Hub-Signature-256')
-      return c.json({ success: false, error: 'Invalid signature' }, 401)
-    }
-
-    let body: {
-      object?: string
-      entry?: unknown[]
-    }
+    let body: { object?: string; entry?: unknown[] } | null = null
     try {
       body = JSON.parse(rawBody) as { object?: string; entry?: unknown[] }
     } catch {
+      // leave body null
+    }
+
+    logger.info(
+      {
+        signaturePresent: !!sigHeader,
+        signatureValid: sig.valid,
+        bodyBytes: rawBody.length,
+        ...summarizeWebhook(body),
+      },
+      '📥 [WEBHOOK] POST received',
+    )
+
+    if (!sig.valid) {
+      logger.warn(
+        { reason: sig.reason, expectedPrefix: sig.expectedPrefix, receivedPrefix: sig.receivedPrefix, preview: rawBody.slice(0, 400) },
+        '❌ [WEBHOOK] signature INVALID — rejecting (401)',
+      )
+      return c.json({ success: false, error: 'Invalid signature' }, 401)
+    }
+
+    if (!body) {
+      logger.warn({ preview: rawBody.slice(0, 400) }, '❌ [WEBHOOK] invalid JSON payload (400)')
       return c.json({ success: false, error: 'Invalid JSON payload' }, 400)
     }
 
@@ -90,9 +137,11 @@ export const interactionController = {
         createdAt: formatToIso(),
         error: null,
       })
+      logger.info({ queueKey: queueRef.key }, '✅ [WEBHOOK] enqueued for processing')
       return c.json(successResponseSchema.parse({ success: true }))
     }
 
+    logger.warn({ object: body.object }, '⚠️ [WEBHOOK] ignored — not a page event (400)')
     return c.json({ success: false, error: 'Unknown event payload' }, 400)
   },
 

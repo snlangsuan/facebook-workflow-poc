@@ -50,6 +50,7 @@ async function handleMessaging(pageId: string | undefined, msg: IWebhookMessagin
     logger.info({ eventId }, 'Skipping duplicate message event')
     return
   }
+  logger.info({ senderId: msg.sender.id, mid: msg.message.mid }, '💬 [WORKER] processing message')
   await interactionService.receiveCustomerMessage({
     senderId: msg.sender.id,
     senderName: `Customer ${msg.sender.id}`,
@@ -70,6 +71,7 @@ async function handleChange(pageId: string | undefined, change: IWebhookChange):
       logger.info({ eventId }, 'Skipping duplicate comment event')
       return
     }
+    logger.info({ commentId: value.comment_id, postId: value.post_id }, '💬 [WORKER] processing comment')
     await interactionService.receiveCustomerComment({
       postId: value.post_id || 'post_1',
       senderName: value.from?.name || 'Anonymous',
