@@ -41,6 +41,7 @@ export interface IComment {
   text: string
   timestamp: string
   avatarUrl?: string
+  fromId?: string
   parentId?: string | null
   status?: 'sent' | 'failed'
   error?: string
@@ -255,6 +256,7 @@ export const dbService = {
       error?: string
       avatarUrl?: string
       timestamp?: string
+      fromId?: string
     },
   ): Promise<IComment | null> => {
     const ref = rtdb.ref(`posts/${postId}`)
@@ -271,6 +273,7 @@ export const dbService = {
       timestamp: opts?.timestamp ? formatToIso(opts.timestamp) : formatToIso(),
       parentId: opts?.parentId ?? null,
       ...(opts?.avatarUrl ? { avatarUrl: opts.avatarUrl } : {}),
+      ...(opts?.fromId ? { fromId: opts.fromId } : {}),
       ...(opts?.status ? { status: opts.status } : {}),
       ...(opts?.error ? { error: opts.error } : {}),
     }

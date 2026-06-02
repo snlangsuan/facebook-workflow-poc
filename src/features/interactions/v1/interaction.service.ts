@@ -209,7 +209,7 @@ async function sendCommentReply(pageAccessToken: string, targetId: string, text:
 
 interface IGraphComment {
   id: string
-  from?: { name?: string; picture?: { data?: { url?: string } } }
+  from?: { id?: string; name?: string; picture?: { data?: { url?: string } } }
   message?: string
   parent?: { id?: string }
   created_time?: string
@@ -255,6 +255,7 @@ async function syncPostComments(postId: string, conn: IFbPageConnection): Promis
         id: cm.id,
         parentId: cm.parent?.id ?? null,
         avatarUrl: cm.from?.picture?.data?.url,
+        fromId: cm.from?.id,
         timestamp: cm.created_time,
       })
     }
@@ -546,9 +547,10 @@ export const interactionService = {
         method: 'POST',
       })
       if (!res.ok) {
-        const err = (await res.json()) as unknown as Record<string, unknown>
+        const err = (await res.json()) as { error?: { message?: string } }
         logger.error(err, 'Failed to toggle comment visibility')
-        throw new Error(`Could not ${hidden ? 'hide' : 'unhide'} the comment on Facebook.`)
+        // Facebook does not allow hiding the page's own comments, etc. — surface the reason.
+        throw new Error(err.error?.message || `Could not ${hidden ? 'hide' : 'unhide'} the comment on Facebook.`)
       }
     }
     const updated = await dbService.setCommentHidden(postId, commentId, hidden)

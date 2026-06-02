@@ -1152,8 +1152,9 @@
         const displayName = usePage ? connectedPage.name : c.senderName;
         const fallbackAvatar = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(displayName)}`;
         const avatar = usePage ? pageAvatarUrl() : (c.avatarUrl || fallbackAvatar);
-        // Hide/unhide only applies to real user comments (FB id, not our own page replies).
-        const canHide = !isPage && c.id.includes('_');
+        // Hide/unhide only works on comments made by OTHER users — Facebook rejects
+        // hiding the page's own comments. Requires the commenter id (from a sync).
+        const canHide = !isPage && c.id.includes('_') && c.fromId && connectedPage && c.fromId !== connectedPage.id;
         const hiddenBadge = c.hidden
           ? '<span class="text-[8px] font-bold tracking-wider uppercase text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded px-1.5 py-0.5">Hidden</span>'
           : '';
