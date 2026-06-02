@@ -7,6 +7,16 @@ import { v1Router } from '#/infrastructure/http/routes/v1/index'
 
 const app = new Hono()
 
+// Log every incoming request (method, path, status) — lets us see if Facebook's
+// webhook is even reaching the server, and on which path. Skips noisy static assets.
+app.use('*', async (c, next) => {
+  await next()
+  const path = c.req.path
+  if (!/\.(html|js|css|svg|png|ico|map)$/.test(path)) {
+    logger.info({ method: c.req.method, path, status: c.res.status }, '➡️  HTTP request')
+  }
+})
+
 app.use('*', cors())
 
 // The whole app (API + static frontend) is served under the /demo prefix.
