@@ -53,6 +53,16 @@ export const setPersonaSpec = describeRoute({
   },
 })
 
+export const setSettingsSpec = describeRoute({
+  tags: ['Connections'],
+  summary: 'Toggle AI auto-reply for inbox/comments on a page',
+  responses: {
+    200: {
+      description: 'Settings updated successfully',
+    },
+  },
+})
+
 export const getConfigSpec = describeRoute({
   tags: ['Connections'],
   summary: 'Get public configuration parameters',

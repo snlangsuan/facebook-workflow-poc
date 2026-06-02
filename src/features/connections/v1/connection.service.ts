@@ -59,6 +59,14 @@ export const connectionService = {
     await connectionRepository.setSystemInstruction(userId, pageId, instruction)
   },
 
+  async setAutoReplySettings(
+    userId: string,
+    pageId: string,
+    settings: { autoReplyInbox?: boolean; autoReplyComment?: boolean },
+  ): Promise<void> {
+    await connectionRepository.setAutoReplySettings(userId, pageId, settings)
+  },
+
   /**
    * POST /{page-id}/subscribed_apps with the Page Access Token to start receiving
    * `feed` and `messages` events. Returns true on success.

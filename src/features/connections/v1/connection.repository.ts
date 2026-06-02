@@ -11,6 +11,8 @@ function toResponse(conn: IFbPageConnection): TConnectionResponse {
     userId: conn.userId,
     systemInstruction: conn.systemInstruction,
     subscribed: conn.subscribed,
+    autoReplyInbox: conn.autoReplyInbox,
+    autoReplyComment: conn.autoReplyComment,
   }
 }
 
@@ -37,6 +39,14 @@ export const connectionRepository = {
 
   async setSystemInstruction(userId: string, pageId: string, instruction: string): Promise<void> {
     await dbService.setSystemInstruction(userId, pageId, instruction)
+  },
+
+  async setAutoReplySettings(
+    userId: string,
+    pageId: string,
+    settings: { autoReplyInbox?: boolean; autoReplyComment?: boolean },
+  ): Promise<void> {
+    await dbService.setAutoReplySettings(userId, pageId, settings)
   },
 
   async delete(userId: string, pageId?: string): Promise<void> {

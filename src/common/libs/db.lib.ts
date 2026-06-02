@@ -11,6 +11,9 @@ export interface IFbPageConnection {
   systemInstruction?: string
   subscribed?: boolean
   createdAt?: string
+  // AI auto-reply toggles (undefined = enabled by default).
+  autoReplyInbox?: boolean
+  autoReplyComment?: boolean
 }
 
 export interface IMessage {
@@ -149,6 +152,15 @@ export const dbService = {
     if (connection.subscribed !== undefined) {
       record.subscribed = connection.subscribed
     }
+    // Preserve AI toggles across reconnects.
+    const autoReplyInbox = connection.autoReplyInbox ?? existing?.autoReplyInbox
+    if (autoReplyInbox !== undefined) {
+      record.autoReplyInbox = autoReplyInbox
+    }
+    const autoReplyComment = connection.autoReplyComment ?? existing?.autoReplyComment
+    if (autoReplyComment !== undefined) {
+      record.autoReplyComment = autoReplyComment
+    }
     await ref.set(record)
   },
 
@@ -158,6 +170,23 @@ export const dbService = {
 
   setSystemInstruction: async (userId: string, pageId: string, instruction: string): Promise<void> => {
     await rtdb.ref(`connections/${userId}/${pageId}/systemInstruction`).set(instruction)
+  },
+
+  setAutoReplySettings: async (
+    userId: string,
+    pageId: string,
+    settings: { autoReplyInbox?: boolean; autoReplyComment?: boolean },
+  ): Promise<void> => {
+    const updates: Record<string, boolean> = {}
+    if (settings.autoReplyInbox !== undefined) {
+      updates.autoReplyInbox = settings.autoReplyInbox
+    }
+    if (settings.autoReplyComment !== undefined) {
+      updates.autoReplyComment = settings.autoReplyComment
+    }
+    if (Object.keys(updates).length > 0) {
+      await rtdb.ref(`connections/${userId}/${pageId}`).update(updates)
+    }
   },
 
   deleteConnection: async (userId: string, pageId?: string): Promise<void> => {

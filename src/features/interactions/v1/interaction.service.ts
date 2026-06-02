@@ -301,6 +301,10 @@ export const interactionService = {
     sseBroker.broadcast('conversation_updated', conv)
 
     const conn = await resolveConnection(payload.pageId)
+    // AI auto-reply can be turned off per page for the inbox.
+    if (conn?.autoReplyInbox === false) {
+      return conv
+    }
     try {
       const previousMessages = conv.messages.slice(0, -1)
       const reply = await geminiService.generateReply({
@@ -514,6 +518,10 @@ export const interactionService = {
     }
 
     const conn = await resolveConnection(post?.pageId)
+    // AI auto-reply can be turned off per page for comments.
+    if (conn?.autoReplyComment === false) {
+      return comment
+    }
     try {
       const reply = await geminiService.generateReply({
         systemInstruction: resolvePersona(conn),

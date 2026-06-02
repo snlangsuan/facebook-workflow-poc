@@ -178,10 +178,27 @@
   <dialog id="personaDialog" class="bg-transparent backdrop:bg-slate-950/80 backdrop:backdrop-blur-md outline-none border-none p-0 m-auto">
     <div class="w-[480px] bg-slate-900/60 border border-slate-800/80 rounded-3xl p-8 flex flex-col gap-5 shadow-2xl backdrop-blur-2xl text-slate-100 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.1),transparent_50%)]">
       <div>
-        <h3 class="font-display text-lg font-bold tracking-tight text-white">AI Persona (System Instruction)</h3>
-        <p class="text-slate-400 text-xs mt-1 leading-relaxed">Controls Gemini's tone and rules when auto-replying for <span id="personaPageName" class="text-indigo-300 font-semibold"></span>. Saved to the page's record.</p>
+        <h3 class="font-display text-lg font-bold tracking-tight text-white">AI Settings</h3>
+        <p class="text-slate-400 text-xs mt-1 leading-relaxed">Auto-reply &amp; persona for <span id="personaPageName" class="text-indigo-300 font-semibold"></span>.</p>
       </div>
-      <textarea id="personaInput" rows="7" class="w-full bg-slate-950/50 border border-slate-800/80 rounded-xl p-4 text-sm text-slate-200 focus:outline-none focus:border-indigo-500/60 transition-all resize-none" placeholder="e.g. Reply in polite Thai, always end with 🙏, never quote prices..."></textarea>
+
+      <div class="flex flex-col gap-2">
+        <label class="flex items-center justify-between gap-3 bg-slate-950/40 border border-slate-800/70 rounded-xl px-4 py-3 cursor-pointer">
+          <span class="text-sm text-slate-200">Auto-reply to inbox messages</span>
+          <input type="checkbox" id="toggleInbox" onchange="updateAutoReply('autoReplyInbox', this.checked)" class="sr-only peer">
+          <span class="relative w-10 h-6 bg-slate-700 rounded-full transition-colors peer-checked:bg-indigo-600 after:content-[''] after:absolute after:top-1 after:left-1 after:w-4 after:h-4 after:bg-white after:rounded-full after:transition-transform peer-checked:after:translate-x-4"></span>
+        </label>
+        <label class="flex items-center justify-between gap-3 bg-slate-950/40 border border-slate-800/70 rounded-xl px-4 py-3 cursor-pointer">
+          <span class="text-sm text-slate-200">Auto-reply to comments</span>
+          <input type="checkbox" id="toggleComment" onchange="updateAutoReply('autoReplyComment', this.checked)" class="sr-only peer">
+          <span class="relative w-10 h-6 bg-slate-700 rounded-full transition-colors peer-checked:bg-indigo-600 after:content-[''] after:absolute after:top-1 after:left-1 after:w-4 after:h-4 after:bg-white after:rounded-full after:transition-transform peer-checked:after:translate-x-4"></span>
+        </label>
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <label class="text-xs font-medium text-slate-400">AI Persona (system instruction)</label>
+        <textarea id="personaInput" rows="6" class="w-full bg-slate-950/50 border border-slate-800/80 rounded-xl p-4 text-sm text-slate-200 focus:outline-none focus:border-indigo-500/60 transition-all resize-none" placeholder="e.g. Reply in polite Thai, always end with 🙏, never quote prices..."></textarea>
+      </div>
       <div class="flex justify-end gap-3">
         <button class="h-10 px-6 bg-slate-800 hover:bg-slate-700 active:scale-[0.98] text-white font-semibold rounded-xl transition-all border border-slate-700/50" onclick="document.getElementById('personaDialog').close()">Cancel</button>
         <button class="h-10 px-6 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white font-bold rounded-xl transition-all" onclick="savePersona()">Save Persona</button>
@@ -212,7 +229,7 @@
 
         <div class="flex gap-2">
           <button id="addPageBtn" onclick="showPageConnectionWizard()" class="flex-1 h-8 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.07] rounded-md text-xs font-medium text-slate-300 transition-colors">+ Add page</button>
-          <button id="personaBtn" onclick="openPersonaDialog()" class="flex-1 h-8 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/25 rounded-md text-xs font-medium text-indigo-300 transition-colors">AI persona</button>
+          <button id="personaBtn" onclick="openPersonaDialog()" class="flex-1 h-8 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/25 rounded-md text-xs font-medium text-indigo-300 transition-colors">AI settings</button>
         </div>
       </div>
 
@@ -745,7 +762,30 @@
       if (!connectedPage) return;
       document.getElementById('personaPageName').innerText = connectedPage.name;
       document.getElementById('personaInput').value = connectedPage.systemInstruction || '';
+      // undefined = enabled by default; only an explicit false means off.
+      document.getElementById('toggleInbox').checked = connectedPage.autoReplyInbox !== false;
+      document.getElementById('toggleComment').checked = connectedPage.autoReplyComment !== false;
       document.getElementById('personaDialog').showModal();
+    }
+
+    async function updateAutoReply(key, value) {
+      if (!connectedPage) return;
+      try {
+        const res = await apiFetch(`/api/v1/connections/${currentUserId}/${connectedPage.id}/settings`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ [key]: value })
+        });
+        if (!res.ok) throw new Error('Failed to update setting');
+        connectedPage[key] = value;
+        const idx = connectedPages.findIndex((p) => p.id === connectedPage.id);
+        if (idx !== -1) connectedPages[idx][key] = value;
+      } catch (err) {
+        showAlertDialog('Update Failed', err.message);
+        // revert the toggle on failure
+        const el = document.getElementById(key === 'autoReplyInbox' ? 'toggleInbox' : 'toggleComment');
+        if (el) el.checked = !value;
+      }
     }
 
     async function savePersona() {

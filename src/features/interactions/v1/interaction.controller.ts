@@ -147,10 +147,17 @@ export const interactionController = {
 
   sseEventsStream: async <E extends Env, P extends string, I extends Input>(c: Context<E, P, I>) => {
     c.header('Content-Type', 'text/event-stream')
-    c.header('Cache-Control', 'no-cache')
+    c.header('Cache-Control', 'no-cache, no-transform')
     c.header('Connection', 'keep-alive')
+    // Tell nginx (and compatible proxies) NOT to buffer this response — the usual
+    // cause of 502/hangs on SSE behind a reverse proxy.
+    c.header('X-Accel-Buffering', 'no')
 
     return streamSSE(c as unknown as Context, async (stream) => {
+      // Flush a byte immediately so the proxy establishes the stream before its
+      // read-timeout fires, and hint a client reconnect delay.
+      await stream.writeSSE({ event: 'connected', data: 'ok', retry: 5000 })
+
       const unsubscribe = sseBroker.subscribe((data: string) => {
         void stream.writeSSE({
           data,
@@ -159,12 +166,13 @@ export const interactionController = {
         })
       })
 
+      // Heartbeat well under common proxy idle timeouts (often 30–60s).
       const interval = setInterval(() => {
         void stream.writeSSE({
           data: 'ping',
           event: 'heartbeat',
         })
-      }, 25000)
+      }, 15000)
 
       stream.onAbort(() => {
         clearInterval(interval)

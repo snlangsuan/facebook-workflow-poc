@@ -6,6 +6,7 @@ import {
   connectionParamPayloadSchema,
   personaParamPayloadSchema,
   personaUpdatePayloadSchema,
+  settingsUpdatePayloadSchema,
   loginPayloadSchema,
 } from '#/features/connections/v1/connection.schema'
 
@@ -14,4 +15,5 @@ export type TConnectionResponse = z.infer<typeof connectionResponseSchema>
 export type TConnectionParamPayload = z.infer<typeof connectionParamPayloadSchema>
 export type TPersonaParamPayload = z.infer<typeof personaParamPayloadSchema>
 export type TPersonaUpdatePayload = z.infer<typeof personaUpdatePayloadSchema>
+export type TSettingsUpdatePayload = z.infer<typeof settingsUpdatePayloadSchema>
 export type TLoginPayload = z.infer<typeof loginPayloadSchema>

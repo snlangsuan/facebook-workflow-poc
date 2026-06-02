@@ -9,6 +9,7 @@ import type {
   TConnectionResponse,
   TPersonaParamPayload,
   TPersonaUpdatePayload,
+  TSettingsUpdatePayload,
   TLoginPayload,
 } from '#/features/connections/v1/connection.type'
 import type { Context, Env, Input } from 'hono'
@@ -53,6 +54,19 @@ export const connectionController = {
     const { userId, pageId } = c.req.valid('param')
     const { systemInstruction } = c.req.valid('json')
     await connectionService.setPersona(userId, pageId, systemInstruction)
+    return c.json(successResponseSchema.parse({ success: true }))
+  },
+
+  setSettings: async <
+    E extends Env,
+    P extends string,
+    I extends Input & ParamInputSchema<TPersonaParamPayload> & JsonInputSchema<TSettingsUpdatePayload>,
+  >(
+    c: Context<E, P, I>,
+  ) => {
+    const { userId, pageId } = c.req.valid('param')
+    const settings = c.req.valid('json')
+    await connectionService.setAutoReplySettings(userId, pageId, settings)
     return c.json(successResponseSchema.parse({ success: true }))
   },
 
