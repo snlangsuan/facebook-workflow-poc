@@ -224,8 +224,15 @@ const COMMENT_PAGE_CAP = 100
  * have into the local post (deduped by comment id). Used by import and the Sync action.
  */
 async function syncPostComments(postId: string, conn: IFbPageConnection): Promise<void> {
-  const post = await interactionRepository.getPost(postId)
-  const existing = new Set((post?.comments ?? []).map((c) => c.id))
+  const incoming: Array<{
+    id: string
+    senderName: string
+    text: string
+    timestamp?: string
+    parentId?: string | null
+    avatarUrl?: string
+    fromId?: string
+  }> = []
 
   let next: string | null =
     `${GRAPH}/${postId}/comments?filter=stream&` +
@@ -247,12 +254,13 @@ async function syncPostComments(postId: string, conn: IFbPageConnection): Promis
     }
 
     for (const cm of data.data ?? []) {
-      if (!cm.message || existing.has(cm.id)) {
+      if (!cm.message) {
         continue
       }
-      existing.add(cm.id)
-      await dbService.addComment(postId, cm.from?.name || 'User', cm.message, {
+      incoming.push({
         id: cm.id,
+        senderName: cm.from?.name || 'User',
+        text: cm.message,
         parentId: cm.parent?.id ?? null,
         avatarUrl: cm.from?.picture?.data?.url,
         fromId: cm.from?.id,
@@ -261,6 +269,10 @@ async function syncPostComments(postId: string, conn: IFbPageConnection): Promis
     }
     next = data.paging?.next ?? null
   }
+
+  // Merge in one write — updates existing comments' metadata (e.g. backfills fromId)
+  // and inserts new ones, preserving local-only fields/comments.
+  await dbService.mergeComments(postId, incoming)
 }
 
 export const interactionService = {

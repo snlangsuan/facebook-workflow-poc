@@ -79,6 +79,38 @@ function flattenUserConnections(node: unknown): IFbPageConnection[] {
   )
 }
 
+interface IIncomingComment {
+  id: string
+  senderName: string
+  text: string
+  timestamp?: string
+  parentId?: string | null
+  avatarUrl?: string
+  fromId?: string
+}
+
+/** Update an existing comment's Facebook-sourced fields, or build a new one. */
+function mergeIncomingComment(existing: IComment | undefined, inc: IIncomingComment): IComment {
+  if (existing) {
+    existing.senderName = inc.senderName
+    existing.text = inc.text
+    existing.parentId = inc.parentId ?? existing.parentId ?? null
+    if (inc.fromId) existing.fromId = inc.fromId
+    if (inc.avatarUrl) existing.avatarUrl = inc.avatarUrl
+    if (inc.timestamp) existing.timestamp = formatToIso(inc.timestamp)
+    return existing
+  }
+  return {
+    id: inc.id,
+    senderName: inc.senderName,
+    text: inc.text,
+    timestamp: inc.timestamp ? formatToIso(inc.timestamp) : formatToIso(),
+    parentId: inc.parentId ?? null,
+    ...(inc.fromId ? { fromId: inc.fromId } : {}),
+    ...(inc.avatarUrl ? { avatarUrl: inc.avatarUrl } : {}),
+  }
+}
+
 export const dbService = {
   getConnections: async (): Promise<IFbPageConnection[]> => {
     const snapshot = await rtdb.ref('connections').once('value')
@@ -284,6 +316,37 @@ export const dbService = {
     post.comments.push(comment)
     await ref.set(post)
     return comment
+  },
+
+  /**
+   * Merge comments fetched from Facebook into a post: update metadata on existing
+   * comments (id matched) and insert new ones, while preserving local-only fields
+   * (hidden/status) and local-only comments (e.g. our own page replies not on FB).
+   */
+  mergeComments: async (
+    postId: string,
+    incoming: Array<{
+      id: string
+      senderName: string
+      text: string
+      timestamp?: string
+      parentId?: string | null
+      avatarUrl?: string
+      fromId?: string
+    }>,
+  ): Promise<IPost | undefined> => {
+    const ref = rtdb.ref(`posts/${postId}`)
+    const post = (await ref.once('value')).val() as IPost | null
+    if (!post) {
+      return undefined
+    }
+    const byId = new Map<string, IComment>((post.comments ?? []).map((c) => [c.id, c]))
+    for (const inc of incoming) {
+      byId.set(inc.id, mergeIncomingComment(byId.get(inc.id), inc))
+    }
+    post.comments = Array.from(byId.values())
+    await ref.set(post)
+    return post
   },
 
   setCommentHidden: async (postId: string, commentId: string, hidden: boolean): Promise<IPost | undefined> => {
