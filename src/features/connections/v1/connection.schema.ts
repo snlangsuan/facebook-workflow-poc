@@ -12,10 +12,23 @@ export const connectionResponseSchema = z.object({
   name: z.string(),
   accessToken: z.string(),
   userId: z.string(),
+  systemInstruction: z.string().optional(),
+  subscribed: z.boolean().optional(),
 })
+
+export const connectionListResponseSchema = z.array(connectionResponseSchema)
 
 export const connectionParamPayloadSchema = z.object({
   userId: z.string().min(1),
+})
+
+export const personaParamPayloadSchema = z.object({
+  userId: z.string().min(1),
+  pageId: z.string().min(1),
+})
+
+export const personaUpdatePayloadSchema = z.object({
+  systemInstruction: z.string().min(1),
 })
 
 export const loginPayloadSchema = z.object({

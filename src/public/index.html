@@ -59,56 +59,55 @@
     }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 flex items-center justify-center h-screen w-screen font-sans overflow-hidden antialiased select-none bg-[radial-gradient(circle_at_top,rgba(15,23,42,0.6),rgba(2,6,23,1))]">
+<body class="bg-[#0b0d11] text-slate-100 flex items-center justify-center h-screen w-screen font-sans overflow-hidden antialiased select-none">
 
-  <div class="fixed inset-0 bg-slate-950/95 backdrop-blur-2xl flex items-center justify-center z-50 transition-all duration-500" id="loginOverlay">
-    <div class="absolute w-[350px] h-[350px] bg-indigo-500/10 rounded-full blur-[100px] pointer-events-none animate-pulse-slow"></div>
-    <div class="w-[440px] bg-slate-900/40 border border-slate-800/60 rounded-3xl p-10 flex flex-col gap-6 shadow-2xl backdrop-blur-2xl relative z-10 bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.08),transparent_60%)]">
-      <div class="text-center flex flex-col items-center gap-2">
-        <div class="w-12 h-12 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl flex items-center justify-center text-indigo-400 mb-2">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.57-.598-3.75h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/>
+  <div class="fixed inset-0 bg-[#0b0d11] flex items-center justify-center z-50 transition-opacity duration-300" id="loginOverlay">
+    <div class="w-[380px] bg-[#14171d] border border-white/10 rounded-2xl p-8 flex flex-col gap-5 shadow-2xl">
+      <div class="flex flex-col gap-1.5">
+        <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white mb-3">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
         </div>
-        <h1 class="font-display text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">OMNI IDENTITY</h1>
-        <p class="text-slate-400 text-xs font-semibold tracking-wider uppercase">Facebook Workflow Controller</p>
+        <h1 class="text-xl font-semibold text-white">Sign in</h1>
+        <p class="text-slate-400 text-sm">Manage your Facebook Page inbox and comments.</p>
       </div>
-      
-      <div class="flex flex-col gap-2">
-        <label class="text-[10px] font-bold text-slate-400 tracking-widest uppercase">Email Credentials</label>
-        <input type="email" id="emailInput" class="w-full h-12 bg-slate-950/50 border border-slate-800/80 rounded-xl px-4 text-sm text-slate-200 focus:outline-none focus:border-indigo-500/60 focus:ring-2 focus:ring-indigo-500/20 transition-all font-medium" value="admin@example.com">
+
+      <div class="flex flex-col gap-1.5">
+        <label class="text-[13px] font-medium text-slate-300">Email</label>
+        <input type="email" id="emailInput" class="w-full h-11 bg-[#0e1116] border border-white/10 rounded-lg px-3.5 text-sm text-slate-100 focus:outline-none focus:border-indigo-500/70 transition-colors" placeholder="you@company.com" autocomplete="username">
       </div>
-      
-      <div class="flex flex-col gap-2">
-        <label class="text-[10px] font-bold text-slate-400 tracking-widest uppercase">Secret Key / Password</label>
-        <input type="password" id="passwordInput" class="w-full h-12 bg-slate-950/50 border border-slate-800/80 rounded-xl px-4 text-sm text-slate-200 focus:outline-none focus:border-indigo-500/60 focus:ring-2 focus:ring-indigo-500/20 transition-all font-medium" value="password123">
+
+      <div class="flex flex-col gap-1.5">
+        <label class="text-[13px] font-medium text-slate-300">Password</label>
+        <input type="password" id="passwordInput" class="w-full h-11 bg-[#0e1116] border border-white/10 rounded-lg px-3.5 text-sm text-slate-100 focus:outline-none focus:border-indigo-500/70 transition-colors" placeholder="••••••••" autocomplete="current-password">
       </div>
-      
-      <button class="h-12 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white text-sm font-bold tracking-wider uppercase rounded-xl transition-all shadow-lg shadow-indigo-600/20" id="loginBtn">Authenticate Admin</button>
+
+      <button class="h-11 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.99] text-white text-sm font-semibold rounded-lg transition-all mt-1" id="loginBtn">Sign in</button>
     </div>
   </div>
 
-  <div class="fixed inset-0 bg-slate-950/90 backdrop-blur-2xl flex items-center justify-center z-40 transition-all duration-500" id="wizardOverlay" style="display: none;">
-    <div class="absolute w-[350px] h-[350px] bg-blue-500/10 rounded-full blur-[100px] pointer-events-none animate-pulse-slow"></div>
-    <div class="w-[500px] bg-slate-900/40 border border-slate-800/60 rounded-3xl p-10 flex flex-col gap-6 shadow-2xl backdrop-blur-2xl relative z-10 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.08),transparent_60%)]">
-      <div class="text-center flex flex-col items-center gap-2">
-        <div class="w-12 h-12 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-center justify-center text-blue-400 mb-2">
-          <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24">
+  <div class="fixed inset-0 bg-[#0b0d11]/95 flex items-center justify-center z-40 transition-opacity duration-300" id="wizardOverlay" style="display: none;">
+    <div class="w-[460px] bg-[#14171d] border border-white/10 rounded-2xl p-8 flex flex-col gap-5 shadow-2xl">
+      <div class="flex flex-col gap-1.5">
+        <div class="w-10 h-10 bg-[#1877F2] rounded-xl flex items-center justify-center text-white mb-3">
+          <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
             <path d="M9 8h-3v4h3v12h5v-12h3.642l.358-4h-4v-1.667c0-.955.192-1.333 1.115-1.333h2.885v-5h-3.808c-3.596 0-5.192 1.583-5.192 4.615v3.385z"/>
           </svg>
         </div>
-        <h2 class="font-display text-2xl font-extrabold tracking-tight">Connect Account</h2>
-        <p class="text-slate-400 text-sm mt-1 leading-relaxed">Establish credentials to link managed pages to OMNI sync</p>
+        <h2 class="text-xl font-semibold text-white">Connect a Facebook Page</h2>
+        <p class="text-slate-400 text-sm">Sign in with Facebook and choose the Pages you want to manage here.</p>
       </div>
 
-      <button class="h-12 bg-blue-600 hover:bg-blue-500 active:scale-[0.98] text-white text-sm font-bold tracking-wider uppercase rounded-xl transition-all flex items-center justify-center gap-3 shadow-lg shadow-blue-600/20" id="fbAuthBtn">
-        <span>Connect Facebook Account</span>
+      <button class="h-11 bg-[#1877F2] hover:bg-[#1466d4] active:scale-[0.99] text-white text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-2.5" id="fbAuthBtn">
+        <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M9 8h-3v4h3v12h5v-12h3.642l.358-4h-4v-1.667c0-.955.192-1.333 1.115-1.333h2.885v-5h-3.808c-3.596 0-5.192 1.583-5.192 4.615v3.385z"/></svg>
+        <span>Continue with Facebook</span>
       </button>
 
-      <div class="hidden flex flex-col gap-4" id="fbPagesSection">
-        <h3 class="text-[10px] font-bold text-slate-400 tracking-widest uppercase">Discovered Managed Pages</h3>
-        <div class="flex flex-col gap-2 max-h-[220px] overflow-y-auto pr-1" id="fbPagesList"></div>
-        <button class="h-12 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white text-sm font-bold tracking-wider uppercase rounded-xl transition-all" id="connectPageBtn" disabled>Establish Sync Pipeline</button>
+      <div class="hidden flex flex-col gap-3" id="fbPagesSection">
+        <h3 class="text-[13px] font-medium text-slate-400">Your Pages</h3>
+        <div class="flex flex-col gap-2 max-h-[240px] overflow-y-auto pr-1" id="fbPagesList"></div>
+        <button class="h-11 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.99] text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed" id="connectPageBtn" disabled>Connect page</button>
       </div>
     </div>
   </div>
@@ -132,103 +131,105 @@
     </div>
   </dialog>
 
-  <div class="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none animate-pulse-slow"></div>
-  <div class="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-cyan-500/10 rounded-full blur-[120px] pointer-events-none animate-pulse-slow"></div>
+  <dialog id="confirmDialog" class="bg-transparent backdrop:bg-slate-950/80 backdrop:backdrop-blur-md outline-none border-none p-0 m-auto">
+    <div class="w-[400px] bg-slate-900/60 border border-slate-800/80 rounded-3xl p-8 flex flex-col gap-6 shadow-2xl backdrop-blur-2xl text-slate-100 relative overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(239,68,68,0.1),transparent_50%)]">
+      <div class="flex items-start gap-4">
+        <div class="flex-shrink-0 w-12 h-12 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center justify-center text-red-400">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <h3 class="font-display text-lg font-bold tracking-tight text-white" id="confirmDialogTitle">Confirm</h3>
+          <p class="text-slate-400 text-sm mt-1 leading-relaxed break-words whitespace-pre-line" id="confirmDialogMessage"></p>
+        </div>
+      </div>
+      <div class="flex justify-end gap-3">
+        <button class="h-10 px-6 bg-slate-800 hover:bg-slate-700 active:scale-[0.98] text-white font-semibold rounded-xl transition-all border border-slate-700/50" onclick="closeConfirmDialog(false)">Cancel</button>
+        <button id="confirmOkBtn" class="h-10 px-6 bg-red-600 hover:bg-red-500 active:scale-[0.98] text-white font-bold rounded-xl transition-all" onclick="closeConfirmDialog(true)">Confirm</button>
+      </div>
+    </div>
+  </dialog>
 
-  <div class="w-[96vw] h-[94vh] bg-slate-900/15 border border-slate-800/50 rounded-3xl backdrop-blur-2xl flex overflow-hidden shadow-2xl relative shadow-[0_0_50px_-12px_rgba(99,102,241,0.15)]">
-    <div class="w-[280px] border-r border-slate-800/80 bg-slate-950/40 flex flex-col justify-between">
-      <div class="p-6 border-b border-slate-800/85">
-        <div class="flex items-center gap-3 bg-slate-900/40 border border-slate-850/80 rounded-xl p-3" id="connectedPageBadge">
-          <img src="https://api.dicebear.com/7.x/identicon/svg?seed=Facebook" class="w-8 h-8 rounded-lg" alt="FB Page">
+  <dialog id="personaDialog" class="bg-transparent backdrop:bg-slate-950/80 backdrop:backdrop-blur-md outline-none border-none p-0 m-auto">
+    <div class="w-[480px] bg-slate-900/60 border border-slate-800/80 rounded-3xl p-8 flex flex-col gap-5 shadow-2xl backdrop-blur-2xl text-slate-100 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.1),transparent_50%)]">
+      <div>
+        <h3 class="font-display text-lg font-bold tracking-tight text-white">AI Persona (System Instruction)</h3>
+        <p class="text-slate-400 text-xs mt-1 leading-relaxed">Controls Gemini's tone and rules when auto-replying for <span id="personaPageName" class="text-indigo-300 font-semibold"></span>. Saved to the page's record.</p>
+      </div>
+      <textarea id="personaInput" rows="7" class="w-full bg-slate-950/50 border border-slate-800/80 rounded-xl p-4 text-sm text-slate-200 focus:outline-none focus:border-indigo-500/60 transition-all resize-none" placeholder="e.g. Reply in polite Thai, always end with 🙏, never quote prices..."></textarea>
+      <div class="flex justify-end gap-3">
+        <button class="h-10 px-6 bg-slate-800 hover:bg-slate-700 active:scale-[0.98] text-white font-semibold rounded-xl transition-all border border-slate-700/50" onclick="document.getElementById('personaDialog').close()">Cancel</button>
+        <button class="h-10 px-6 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white font-bold rounded-xl transition-all" onclick="savePersona()">Save Persona</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div class="w-screen h-screen bg-[#0b0d11] flex overflow-hidden">
+    <div class="w-[270px] border-r border-white/[0.07] bg-[#0c0e12] flex flex-col justify-between">
+      <div class="p-4 border-b border-white/[0.07] flex flex-col gap-3">
+        <div class="flex items-center gap-2 px-1">
+          <div class="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-white">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          <span class="text-sm font-semibold text-slate-100">Page Inbox</span>
+        </div>
+
+        <div class="flex items-center gap-2.5 bg-white/[0.03] border border-white/[0.07] rounded-lg p-2.5" id="connectedPageBadge">
+          <img src="https://api.dicebear.com/7.x/identicon/svg?seed=page" class="w-7 h-7 rounded-md" alt="Page">
           <div class="min-w-0">
-            <h3 class="text-xs font-bold truncate tracking-wide" id="connectedPageName">Loading Page...</h3>
-            <p class="text-[10px] text-emerald-400 mt-0.5 flex items-center gap-1.5 font-bold tracking-wider uppercase">
-              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse-dot"></span>
-              Sync Engine Active
+            <h3 class="text-[13px] font-semibold truncate text-slate-100" id="connectedPageName">Loading…</h3>
+            <p class="text-[11px] text-emerald-400/90 mt-0.5 flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+              Connected
             </p>
           </div>
         </div>
-      </div>
-      
-      <div class="flex-1 p-4 flex flex-col gap-2">
-        <div class="flex items-center gap-3 px-4 py-3 rounded-xl font-medium cursor-pointer transition-all duration-300 text-slate-400 hover:bg-slate-800/30 hover:text-slate-200" id="navInbox" onclick="switchTab('inbox')">
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-          </svg>
-          <span class="text-xs font-bold tracking-wider uppercase">Inbox Channels</span>
-        </div>
-        
-        <div class="flex items-center gap-3 px-4 py-3 rounded-xl font-medium cursor-pointer transition-all duration-300 text-slate-400 hover:bg-slate-800/30 hover:text-slate-200" id="navPost" onclick="switchTab('post')">
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <line x1="16" y1="13" x2="8" y2="13"></line>
-            <line x1="16" y1="17" x2="8" y2="17"></line>
-            <polyline points="10 9 9 9 8 9"></polyline>
-          </svg>
-          <span class="text-xs font-bold tracking-wider uppercase">Page Feeds</span>
-        </div>
 
-        <div class="mt-auto px-4 py-4 flex flex-col gap-3 border border-slate-800/50 bg-slate-950/50 rounded-2xl mx-1">
-          <div class="flex justify-between items-center">
-            <span class="text-[9px] font-bold text-slate-400 tracking-wider uppercase">Engine Status</span>
-            <span class="flex items-center gap-1 text-[9px] font-bold text-cyan-400 tracking-wider uppercase">
-              <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse-dot"></span>
-              ONLINE
-            </span>
-          </div>
-          <div class="grid grid-cols-2 gap-2 text-[9px]">
-            <div class="bg-black/40 rounded-lg p-2 border border-slate-800/60 flex flex-col gap-0.5">
-              <span class="text-slate-500 font-bold tracking-wide uppercase">Core Latency</span>
-              <span class="font-bold text-indigo-400 font-mono text-[10px]">24 ms</span>
-            </div>
-            <div class="bg-black/40 rounded-lg p-2 border border-slate-800/60 flex flex-col gap-0.5">
-              <span class="text-slate-500 font-bold tracking-wide uppercase">Store Engine</span>
-              <span class="font-bold text-cyan-400 font-mono text-[10px]">FB RTDB</span>
-            </div>
-          </div>
-          <div class="flex justify-between items-center text-[9px] text-slate-500 font-bold uppercase tracking-wider">
-            <span>Payload Stream</span>
-            <span class="font-mono text-slate-400">ACTIVE LISTENER</span>
-          </div>
+        <div class="flex gap-2">
+          <button id="addPageBtn" onclick="showPageConnectionWizard()" class="flex-1 h-8 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.07] rounded-md text-xs font-medium text-slate-300 transition-colors">+ Add page</button>
+          <button id="personaBtn" onclick="openPersonaDialog()" class="flex-1 h-8 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/25 rounded-md text-xs font-medium text-indigo-300 transition-colors">AI persona</button>
         </div>
       </div>
-      
-      <div class="p-6 border-t border-slate-800/85 flex flex-col gap-4 bg-slate-950/20">
-        <div class="flex items-center gap-3">
-          <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&h=150&q=80" class="w-9 h-9 rounded-xl border border-slate-700/50 shadow-inner" alt="User">
-          <div class="min-w-0">
-            <h4 class="text-xs font-bold truncate" id="profileUserName">Jessica Taylor</h4>
-            <p class="text-[10px] text-slate-500 truncate font-mono" id="profileUserEmail">jessica@example.com</p>
+
+      <div class="flex-1 p-3 flex flex-col gap-1.5 overflow-y-auto">
+        <p class="px-2 pb-1 text-[11px] font-semibold text-slate-500">Pages</p>
+        <div class="flex flex-col gap-3" id="pageNav"></div>
+      </div>
+
+      <div class="p-4 border-t border-white/[0.07] flex flex-col gap-3">
+        <div class="flex items-center gap-2.5">
+          <img id="profileAvatar" src="https://api.dicebear.com/7.x/initials/svg?seed=Admin" class="w-8 h-8 rounded-full" alt="">
+          <div class="min-w-0 flex-1">
+            <h4 class="text-[13px] font-medium truncate text-slate-200" id="profileUserName">—</h4>
+            <p class="text-[11px] text-slate-500 truncate" id="profileUserEmail">—</p>
           </div>
         </div>
-        <button class="w-full h-10 bg-red-500/10 hover:bg-red-500/20 active:scale-[0.98] border border-red-500/20 rounded-xl text-red-400 text-[10px] font-bold tracking-wider uppercase transition-all duration-200" id="disconnectBtn">Disconnect Node</button>
+        <button class="w-full h-9 bg-white/[0.03] hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/25 border border-white/[0.07] rounded-md text-xs font-medium text-slate-400 transition-colors" id="disconnectBtn">Sign out</button>
       </div>
     </div>
 
-    <div class="w-[360px] border-r border-slate-800/80 bg-slate-950/10 flex flex-col">
-      <div class="p-6 border-b border-slate-800/85 flex flex-col gap-4">
-        <h2 class="font-display text-xl font-semibold" id="listTitle">Conversations</h2>
+    <div class="w-[340px] border-r border-white/[0.07] bg-[#0a0c10] flex flex-col">
+      <div class="p-4 border-b border-white/[0.07] flex flex-col gap-3">
+        <h2 class="text-base font-semibold text-slate-100" id="listTitle">Conversations</h2>
         <div class="relative">
-          <svg class="absolute left-3 top-3 w-4 h-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg class="absolute left-3 top-2.5 w-4 h-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="11" cy="11" r="8"></circle>
             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
           </svg>
-          <input type="text" placeholder="Search..." class="w-100 h-10 bg-black/20 border border-slate-800/80 rounded-xl pl-10 pr-4 text-sm focus:outline-none focus:border-indigo-500/50 transition-all">
+          <input type="text" placeholder="Search" class="w-full h-9 bg-white/[0.04] border border-white/[0.07] rounded-lg pl-9 pr-3 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500/50 transition-colors">
         </div>
       </div>
-      
-      <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-2.5" id="listContent"></div>
+
+      <div class="flex-1 overflow-y-auto p-3 flex flex-col gap-1.5" id="listContent"></div>
     </div>
 
-    <div class="flex-1 bg-slate-950/5 flex flex-col" id="workspaceDetail">
-      <div class="flex flex-col justify-center items-center h-full gap-4 text-slate-500" id="emptyWorkspaceState">
-        <svg class="w-16 h-16 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"></circle>
-          <line x1="12" y1="16" x2="12" y2="12"></line>
-          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+    <div class="flex-1 bg-[#080a0d] flex flex-col" id="workspaceDetail">
+      <div class="flex flex-col justify-center items-center h-full gap-3 text-slate-600" id="emptyWorkspaceState">
+        <svg class="w-12 h-12 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
         </svg>
-        <p class="text-sm font-medium tracking-wide">Select a conversation or post to start managing</p>
+        <p class="text-sm text-slate-500">Select a conversation or post to get started</p>
       </div>
     </div>
 
@@ -236,15 +237,24 @@
   </div>
 
   <script>
+    const BASE = '/demo'; // path prefix the app is served under
     let activeTab = 'inbox';
     let currentUserId = '';
     let connectedPage = null;
+    let connectedPages = [];
     let selectedActiveId = null;
     let availablePages = [];
     let eventSource = null;
     let fbAppId = '';
+    let fbApiKey = '';
+    let refreshingPromise = null;
 
     document.getElementById('loginBtn').addEventListener('click', handleLogin);
+    ['emailInput', 'passwordInput'].forEach((id) => {
+      document.getElementById(id).addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleLogin();
+      });
+    });
     document.getElementById('fbAuthBtn').addEventListener('click', handleFacebookLogin);
     document.getElementById('connectPageBtn').addEventListener('click', handlePageConnect);
     document.getElementById('disconnectBtn').addEventListener('click', handleDisconnect);
@@ -258,22 +268,97 @@
       document.getElementById('alertDialog').close();
     }
 
+    let confirmResolver = null;
+    function showConfirmDialog(title, message, okLabel = 'Confirm') {
+      document.getElementById('confirmDialogTitle').innerText = title;
+      document.getElementById('confirmDialogMessage').innerText = message;
+      document.getElementById('confirmOkBtn').innerText = okLabel;
+      const dlg = document.getElementById('confirmDialog');
+      dlg.showModal();
+      return new Promise((resolve) => { confirmResolver = resolve; });
+    }
+
+    function closeConfirmDialog(result) {
+      document.getElementById('confirmDialog').close();
+      if (confirmResolver) { confirmResolver(result); confirmResolver = null; }
+    }
+
+    // กด Esc บน dialog -> ถือว่า cancel
+    document.getElementById('confirmDialog').addEventListener('cancel', () => {
+      if (confirmResolver) { confirmResolver(false); confirmResolver = null; }
+    });
+
     async function apiFetch(url, options = {}) {
-      const token = localStorage.getItem('userToken');
-      if (!token) return fetch(url, options);
+      const token = await getValidToken();
+      if (!token) return fetch(BASE + url, options);
       options.headers = {
         ...options.headers,
         'Authorization': `Bearer ${token}`
       };
-      return fetch(url, options);
+      return fetch(BASE + url, options);
+    }
+
+    function decodeJwtExpMs(token) {
+      try {
+        const part = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+        const payload = JSON.parse(atob(part));
+        return payload.exp ? payload.exp * 1000 : 0;
+      } catch (e) {
+        return 0;
+      }
+    }
+
+    // คืน ID token ที่ยัง valid เสมอ — refresh อัตโนมัติเมื่อใกล้/หมดอายุ (Firebase token อายุ ~1 ชม.)
+    async function getValidToken() {
+      const token = localStorage.getItem('userToken');
+      if (!token) return '';
+      const expMs = decodeJwtExpMs(token);
+      // ยังเหลืออายุเกิน 5 นาที → ใช้ token เดิม
+      if (expMs && Date.now() < expMs - 5 * 60 * 1000) return token;
+      if (!refreshingPromise) {
+        refreshingPromise = refreshIdToken().finally(() => { refreshingPromise = null; });
+      }
+      const fresh = await refreshingPromise;
+      return fresh || token;
+    }
+
+    async function refreshIdToken() {
+      const rt = localStorage.getItem('refreshToken');
+      // token หมดอายุแต่ refresh ไม่ได้ (ไม่มี refresh token / ไม่มี apiKey) → บังคับ login ใหม่
+      // กันไม่ให้ส่ง token ที่หมดอายุไปจน 401 วนไปเรื่อย ๆ
+      if (!rt || !fbApiKey) { handleSessionExpired(); return ''; }
+      try {
+        const res = await fetch(`https://securetoken.googleapis.com/v1/token?key=${fbApiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(rt)}`
+        });
+        if (!res.ok) throw new Error('refresh failed');
+        const data = await res.json();
+        localStorage.setItem('userToken', data.id_token);
+        localStorage.setItem('refreshToken', data.refresh_token);
+        return data.id_token;
+      } catch (e) {
+        handleSessionExpired();
+        return '';
+      }
+    }
+
+    function handleSessionExpired() {
+      if (eventSource) { eventSource.close(); eventSource = null; }
+      showAlertDialog('Session Expired', 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง');
+      localStorage.clear();
+      setTimeout(() => location.reload(), 1500);
     }
 
     async function initSession() {
       const storedUser = localStorage.getItem('userId');
       if (storedUser) {
         currentUserId = storedUser;
-        document.getElementById('profileUserName').innerText = localStorage.getItem('userName') || 'Jessica Taylor';
-        document.getElementById('profileUserEmail').innerText = localStorage.getItem('userEmail') || 'jessica@example.com';
+        const profileName = localStorage.getItem('userName') || 'Admin';
+        document.getElementById('profileUserName').innerText = profileName;
+        document.getElementById('profileUserEmail').innerText = localStorage.getItem('userEmail') || '';
+        document.getElementById('profileAvatar').src = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(profileName)}`;
         document.getElementById('loginOverlay').classList.add('opacity-0', 'pointer-events-none');
         
         await fetchConfig();
@@ -283,13 +368,12 @@
 
     async function fetchConfig() {
       try {
-        const res = await fetch('/api/v1/connections/config');
+        const res = await fetch(BASE + '/api/v1/connections/config');
         const data = await res.json();
         fbAppId = data.appId;
-        
-        if (fbAppId && fbAppId !== '<app_id>') {
-          loadFacebookSDK(fbAppId);
-        }
+        fbApiKey = data.firebaseApiKey || '';
+        // ไม่โหลด FB SDK ที่นี่ — โหลดเฉพาะตอนต้องเชื่อมเพจใหม่ (ensureFacebookSDK)
+        // ถ้าเชื่อมเพจไว้แล้วและ token ยังใช้ได้ ก็ไม่ต้องยุ่งกับ Facebook login เลย
       } catch (err) {}
     }
 
@@ -298,8 +382,8 @@
         FB.init({
           appId: appId,
           cookie: true,
-          xfbml: true,
-          version: 'v18.0'
+          xfbml: false,
+          version: 'v25.0'
         });
       };
       (function(d, s, id) {
@@ -311,12 +395,19 @@
       }(document, 'script', 'facebook-jssdk'));
     }
 
+    // โหลด Facebook SDK แบบ lazy — เรียกเฉพาะตอนต้องเชื่อมเพจใหม่เท่านั้น
+    function ensureFacebookSDK() {
+      if (!fbAppId || fbAppId === '<app_id>') return;
+      if (typeof FB !== 'undefined' || document.getElementById('facebook-jssdk')) return;
+      loadFacebookSDK(fbAppId);
+    }
+
     async function handleLogin() {
       const email = document.getElementById('emailInput').value.trim();
       const password = document.getElementById('passwordInput').value;
       
       try {
-        const res = await fetch('/api/v1/connections/login', {
+        const res = await fetch(BASE + '/api/v1/connections/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password })
@@ -333,6 +424,7 @@
         localStorage.setItem('userName', data.email.split('@')[0]);
         localStorage.setItem('userEmail', data.email);
         localStorage.setItem('userToken', data.token);
+        if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
         
         initSession();
       } catch (error) {
@@ -343,8 +435,10 @@
     async function checkFacebookConnection() {
       try {
         const res = await apiFetch(`/api/v1/connections/${currentUserId}`);
-        if (res.ok) {
-          connectedPage = await res.json();
+        const list = res.ok ? await res.json() : [];
+        connectedPages = Array.isArray(list) ? list : [];
+        if (connectedPages.length > 0) {
+          connectedPage = connectedPages[0];
           setupDashboard();
         } else {
           showPageConnectionWizard();
@@ -355,17 +449,19 @@
     }
 
     function showPageConnectionWizard() {
+      ensureFacebookSDK(); // โหลด FB SDK เฉพาะตอนเปิด wizard เพื่อเชื่อมเพจใหม่
       document.getElementById('wizardOverlay').style.display = 'flex';
       const container = document.getElementById('fbPagesList');
       container.innerHTML = '<div class="text-center text-slate-400 text-sm">Please log in to Facebook above.</div>';
     }
 
     function handleFacebookLogin() {
+      ensureFacebookSDK();
       if (typeof FB === 'undefined') {
-        showAlertDialog('Facebook SDK Error', 'Facebook SDK not loaded. Please try again.');
+        showAlertDialog('Loading Facebook…', 'Facebook SDK กำลังโหลด กรุณากดอีกครั้งในอีกสักครู่');
         return;
       }
-      
+
       FB.login(function(response) {
         if (response.authResponse) {
           const userAccessToken = response.authResponse.accessToken;
@@ -454,9 +550,12 @@
         });
         
         if (res.ok) {
-          connectedPage = await res.json();
+          const saved = await res.json();
+          if (saved && saved.subscribed === false) {
+            showAlertDialog('Webhook Subscription Warning', 'Page connected, but auto-subscription to feed/messages events failed. Check the Page Access Token and App Secret.');
+          }
           document.getElementById('wizardOverlay').style.display = 'none';
-          setupDashboard();
+          await checkFacebookConnection();
         }
       } catch (err) {
         showAlertDialog('Connection Failed', 'Failed to connect Facebook page. Please try again.');
@@ -464,25 +563,128 @@
     }
 
     function setupDashboard() {
-      document.getElementById('connectedPageName').innerText = connectedPage.name;
-      document.getElementById('connectedPageBadge').querySelector('img').src = `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(connectedPage.name)}`;
-      
-      switchTab('inbox');
+      updatePageBadge();
+      renderPageNav();
+      switchTab(activeTab || 'inbox');
       initializeRealtimeStream();
     }
 
-    function initializeRealtimeStream() {
+    function updatePageBadge() {
+      if (!connectedPage) return;
+      document.getElementById('connectedPageName').innerText = connectedPage.name;
+      document.getElementById('connectedPageBadge').querySelector('img').src = `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(connectedPage.name)}`;
+    }
+
+    const INBOX_ICON = '<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>';
+    const FEED_ICON = '<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>';
+
+    function renderPageNav() {
+      const nav = document.getElementById('pageNav');
+      if (!nav) return;
+      nav.innerHTML = connectedPages.map((p) => {
+        const isActivePage = connectedPage && connectedPage.id === p.id;
+        const subItem = (tab, label, icon) => {
+          const on = isActivePage && activeTab === tab;
+          return `<button onclick="selectPageTab('${p.id}','${tab}')" class="flex items-center gap-2.5 ml-3 pl-4 pr-3 py-2 rounded-lg text-left transition-all border-l ${on ? 'text-indigo-300 bg-indigo-500/10 border-indigo-500/50' : 'text-slate-400 border-slate-800/60 hover:bg-slate-800/30 hover:text-slate-200'}">
+            ${icon}
+            <span class="text-[11px] font-bold tracking-wider uppercase">${label}</span>
+          </button>`;
+        };
+        return `
+          <div class="flex flex-col gap-1 group">
+            <div class="flex items-center gap-2.5 px-3 py-2 rounded-xl ${isActivePage ? 'bg-slate-800/40 border border-slate-700/50' : ''}">
+              <img src="https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(p.name)}" class="w-6 h-6 rounded-lg">
+              <span class="text-xs font-bold truncate flex-1">${p.name}</span>
+              <button onclick="removePage('${p.id}', event)" title="Remove page"
+                class="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-md text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all text-sm leading-none">✕</button>
+            </div>
+            ${subItem('inbox', 'Inbox', INBOX_ICON)}
+            ${subItem('post', 'Feed', FEED_ICON)}
+          </div>`;
+      }).join('');
+    }
+
+    function selectPageTab(pageId, tab) {
+      const found = connectedPages.find((p) => p.id === pageId);
+      if (found) {
+        connectedPage = found;
+        updatePageBadge();
+      }
+      switchTab(tab);
+    }
+
+    async function removePage(pageId, ev) {
+      if (ev) ev.stopPropagation();
+      const page = connectedPages.find((p) => p.id === pageId);
+      if (!page) return;
+      const ok = await showConfirmDialog(
+        'Remove Page',
+        `Remove "${page.name}"?\nAuto-replies will stop and the webhook subscription will be removed for this page.`,
+        'Remove'
+      );
+      if (!ok) return;
+      try {
+        const res = await apiFetch(`/api/v1/connections/${currentUserId}?pageId=${encodeURIComponent(pageId)}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Failed to remove page');
+        // refresh the connected-pages list; falls back to the wizard if none remain
+        await checkFacebookConnection();
+      } catch (e) {
+        showAlertDialog('Remove Failed', e.message);
+      }
+    }
+
+    function filterByActivePage(items) {
+      if (!connectedPage || !Array.isArray(items)) return items;
+      // Show items belonging to the active page; untagged items (no pageId) stay visible.
+      return items.filter((it) => !it.pageId || it.pageId === connectedPage.id);
+    }
+
+    function openPersonaDialog() {
+      if (!connectedPage) return;
+      document.getElementById('personaPageName').innerText = connectedPage.name;
+      document.getElementById('personaInput').value = connectedPage.systemInstruction || '';
+      document.getElementById('personaDialog').showModal();
+    }
+
+    async function savePersona() {
+      if (!connectedPage) return;
+      const systemInstruction = document.getElementById('personaInput').value.trim();
+      if (!systemInstruction) {
+        showAlertDialog('Persona Required', 'Please enter a system instruction.');
+        return;
+      }
+      try {
+        const res = await apiFetch(`/api/v1/connections/${currentUserId}/${connectedPage.id}/persona`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ systemInstruction })
+        });
+        if (!res.ok) throw new Error('Failed to save persona');
+        connectedPage.systemInstruction = systemInstruction;
+        const idx = connectedPages.findIndex((p) => p.id === connectedPage.id);
+        if (idx !== -1) connectedPages[idx].systemInstruction = systemInstruction;
+        document.getElementById('personaDialog').close();
+      } catch (err) {
+        showAlertDialog('Save Failed', err.message);
+      }
+    }
+
+    async function initializeRealtimeStream() {
       if (eventSource) {
         eventSource.close();
       }
-      
-      eventSource = new EventSource('/api/v1/interactions/events');
-      
+
+      // EventSource can't set Authorization headers, so pass a fresh Firebase token as a query param.
+      const token = await getValidToken();
+      if (!token) return;
+      eventSource = new EventSource(`${BASE}/api/v1/interactions/events?access_token=${encodeURIComponent(token)}`);
+
       eventSource.addEventListener('message', (e) => {
         if (e.data === 'ping') return;
         try {
           const { event, data } = JSON.parse(e.data);
-          
+          const belongsToActivePage = !connectedPage || !data.pageId || data.pageId === connectedPage.id;
+
           if (event === 'conversation_updated') {
             if (activeTab === 'inbox') {
               fetchConversationsList(false);
@@ -490,19 +692,49 @@
                 renderOpenConversation(data);
               }
             }
+            // หากผู้ใช้ไม่ได้อยู่แท็บ inbox หรือคนละเพจ ให้เด้ง badge แจ้งเตือนที่เมนู
+            if (belongsToActivePage && (activeTab !== 'inbox' || selectedActiveId !== data.id)) {
+              flashNewActivity(data.pageId, 'inbox');
+            }
           } else if (event === 'post_updated') {
             if (activeTab === 'post') {
               fetchPostsList(false);
               if (selectedActiveId === data.id) {
                 renderOpenPost(data);
               }
+            } else if (belongsToActivePage) {
+              flashNewActivity(data.pageId, 'post');
             }
           } else if (event === 'posts_updated') {
             if (activeTab === 'post') {
               fetchPostsList(false);
+            } else if (belongsToActivePage) {
+              flashNewActivity(data.pageId, 'post');
             }
           }
         } catch (err) {}
+      });
+
+      eventSource.onerror = () => {
+        // On a fatal error (e.g. token expired -> 401) EventSource closes and won't retry,
+        // so reconnect with a freshly-refreshed token after a short delay.
+        if (eventSource && eventSource.readyState === EventSource.CLOSED) {
+          setTimeout(() => { initializeRealtimeStream(); }, 3000);
+        }
+      };
+    }
+
+    // เด้งจุดแจ้งเตือนสีฟ้าบนเมนูย่อยของเพจเมื่อมี activity ใหม่ที่ยังไม่ได้เปิดดู
+    function flashNewActivity(pageId, tab) {
+      const nav = document.getElementById('pageNav');
+      if (!nav) return;
+      const buttons = nav.querySelectorAll(`button[onclick*="'${tab}'"]`);
+      buttons.forEach((btn) => {
+        if (!btn.getAttribute('onclick').includes(`'${pageId || (connectedPage && connectedPage.id)}'`)) return;
+        if (btn.querySelector('.activity-dot')) return;
+        const dot = document.createElement('span');
+        dot.className = 'activity-dot ml-auto w-2 h-2 rounded-full bg-cyan-400 animate-pulse-dot';
+        btn.appendChild(dot);
       });
     }
 
@@ -521,29 +753,27 @@
     function switchTab(tab) {
       activeTab = tab;
       selectedActiveId = null;
-      document.getElementById('navInbox').classList.remove('text-indigo-300', 'bg-indigo-500/10', 'border', 'border-indigo-500/20');
-      document.getElementById('navPost').classList.remove('text-indigo-300', 'bg-indigo-500/10', 'border', 'border-indigo-500/20');
-      
+
       document.getElementById('emptyWorkspaceState').style.display = 'flex';
       const openDetail = document.getElementById('openDetailContainer');
       if (openDetail) openDetail.remove();
-      
+
+      const pageLabel = connectedPage ? connectedPage.name : '';
       if (tab === 'inbox') {
-        document.getElementById('navInbox').classList.add('text-indigo-300', 'bg-indigo-500/10', 'border', 'border-indigo-500/20');
-        document.getElementById('listTitle').innerText = 'Conversations';
+        document.getElementById('listTitle').innerText = pageLabel ? `${pageLabel} · Inbox` : 'Conversations';
         fetchConversationsList();
       } else {
-        document.getElementById('navPost').classList.add('text-indigo-300', 'bg-indigo-500/10', 'border', 'border-indigo-500/20');
-        document.getElementById('listTitle').innerText = 'Page Posts';
+        document.getElementById('listTitle').innerText = pageLabel ? `${pageLabel} · Feed` : 'Page Posts';
         fetchPostsList();
       }
+      renderPageNav();
     }
 
     async function fetchConversationsList(shouldResetWorkspace = true) {
       try {
         const res = await apiFetch('/api/v1/interactions/conversations');
-        const list = await res.json();
-        
+        const list = filterByActivePage(await res.json());
+
         const container = document.getElementById('listContent');
         container.innerHTML = '';
         
@@ -557,18 +787,26 @@
           div.onclick = () => selectConversation(c.id);
           
           const time = new Date(c.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          
+          const failed = c.autoReplyStatus === 'failed';
+          const dotClass = failed ? 'bg-red-500 animate-pulse-dot' : 'bg-emerald-500';
+          const failBadge = failed
+            ? '<span class="text-[8px] font-bold tracking-wider uppercase text-red-400 bg-red-500/10 border border-red-500/20 rounded px-1.5 py-0.5">Needs Reply</span>'
+            : '';
+
           div.innerHTML = `
             <div class="relative flex-shrink-0">
               <img src="${c.avatar}" class="w-11 h-11 rounded-full object-cover">
-              <div class="absolute right-0.5 bottom-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-slate-900"></div>
+              <div class="absolute right-0.5 bottom-0.5 w-2.5 h-2.5 rounded-full ${dotClass} border-2 border-slate-900"></div>
             </div>
             <div class="flex-1 min-w-0 flex flex-col gap-1">
-              <div class="flex justify-between items-center">
+              <div class="flex justify-between items-center gap-2">
                 <h4 class="text-sm font-semibold truncate text-slate-100">${c.name}</h4>
-                <span class="text-xxs text-slate-500 font-medium">${time}</span>
+                <span class="text-xxs text-slate-500 font-medium flex-shrink-0">${time}</span>
               </div>
-              <p class="text-xs text-slate-400 truncate">${c.lastMessage}</p>
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-xs text-slate-400 truncate">${c.lastMessage}</p>
+                ${failBadge}
+              </div>
             </div>
           `;
           container.appendChild(div);
@@ -606,18 +844,33 @@
       
       let messagesHtml = '';
       conv.messages.forEach((msg) => {
-        const bubbleClass = msg.senderId === 'page'
+        const isPage = msg.senderId === 'page';
+        const bubbleClass = isPage
           ? 'self-end bg-gradient-to-br from-indigo-600 to-indigo-700 text-slate-100 rounded-2xl rounded-tr-none p-4 max-w-[70%] flex flex-col gap-1 shadow-lg shadow-indigo-950/50 border border-indigo-500/20'
           : 'self-start bg-slate-900/40 border border-slate-800/65 text-slate-200 rounded-2xl rounded-tl-none p-4 max-w-[70%] flex flex-col gap-1 shadow-sm backdrop-blur-sm';
         const formattedTime = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const senderTag = isPage
+          ? `<span class="text-[9px] font-bold tracking-wider uppercase text-indigo-200/80">${msg.senderName || 'Page'}</span>`
+          : '';
         messagesHtml += `
           <div class="${bubbleClass}">
+            ${senderTag}
             <div class="text-sm leading-relaxed">${msg.text}</div>
             <div class="text-[10px] text-slate-400 self-end mt-1.5">${formattedTime}</div>
           </div>
         `;
       });
-      
+
+      const failedBanner = conv.autoReplyStatus === 'failed'
+        ? `<div class="mx-6 mt-4 px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-xl flex items-start gap-3">
+             <svg class="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+             <div class="min-w-0">
+               <p class="text-xs font-bold text-red-300 tracking-wide uppercase">Auto-reply failed — manual takeover needed</p>
+               <p class="text-[11px] text-red-400/80 mt-0.5 break-words">${conv.autoReplyError || 'Gemini or the Messenger API returned an error.'}</p>
+             </div>
+           </div>`
+        : '';
+
       container.innerHTML = `
         <div class="px-6 py-5 border-b border-slate-800/85 flex items-center justify-between">
           <div class="flex items-center gap-3.5">
@@ -628,6 +881,7 @@
             </div>
           </div>
         </div>
+        ${failedBanner}
         <div class="flex-1 overflow-y-auto p-6 flex flex-col gap-4" id="chatMessagesBox">${messagesHtml}</div>
         <div class="px-6 py-5 border-t border-slate-800/85 flex gap-3 items-center bg-slate-950/10">
           <input type="text" id="chatComposerInput" class="flex-1 h-11 bg-black/25 border border-slate-800/80 rounded-xl px-4 text-sm focus:outline-none focus:border-indigo-500/50 transition-all" placeholder="Write reply to ${conv.name}..." onkeydown="handleComposeKey(event)">
@@ -675,8 +929,8 @@
     async function fetchPostsList(shouldResetWorkspace = true) {
       try {
         const res = await apiFetch('/api/v1/interactions/posts');
-        const list = await res.json();
-        
+        const list = filterByActivePage(await res.json());
+
         const container = document.getElementById('listContent');
         container.innerHTML = '';
         
@@ -691,15 +945,19 @@
           div.onclick = () => selectPost(p.id);
           
           const time = new Date(p.createdAt).toLocaleDateString();
-          
+          const failBadge = p.autoReplyStatus === 'failed'
+            ? '<span class="text-[8px] font-bold tracking-wider uppercase text-red-400 bg-red-500/10 border border-red-500/20 rounded px-1.5 py-0.5">Needs Reply</span>'
+            : '';
+
           div.innerHTML = `
             <div class="flex justify-between items-center">
               <h4 class="text-xs font-semibold text-slate-400">Page Post</h4>
               <span class="text-xxs text-slate-500 font-medium">${time}</span>
             </div>
             <p class="text-xs text-slate-200 leading-relaxed line-clamp-2">${p.content}</p>
-            <div class="flex gap-3 text-xxs text-indigo-400 font-medium">
-              <span>${p.comments.length} comments</span>
+            <div class="flex gap-3 items-center text-xxs text-indigo-400 font-medium">
+              <span>${(p.comments || []).length} comments</span>
+              ${failBadge}
             </div>
           `;
           container.appendChild(div);
@@ -735,23 +993,59 @@
       container.className = 'flex flex-col h-full';
       container.id = 'openDetailContainer';
       
-      let commentsHtml = '';
-      post.comments.forEach((c) => {
+      const allComments = post.comments || [];
+      const renderComment = (c, nested) => {
         const time = new Date(c.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        commentsHtml += `
-          <div class="bg-slate-900/30 border border-slate-800/60 rounded-xl p-4 flex flex-col gap-2">
-            <div class="flex justify-between items-center">
-              <span class="text-xs font-semibold text-slate-300">${c.senderName}</span>
-              <span class="text-[10px] text-slate-500">${time}</span>
+        const isPage = c.senderName === 'AI Assistant' || c.senderName === 'Page Admin';
+        const wrapClass = nested
+          ? 'ml-6 border-l-2 border-indigo-500/30 pl-4 bg-indigo-500/5 border border-indigo-500/15 rounded-xl p-3 flex flex-col gap-2'
+          : 'bg-slate-900/30 border border-slate-800/60 rounded-xl p-4 flex flex-col gap-2';
+        const tag = isPage
+          ? `<span class="text-[8px] font-bold tracking-wider uppercase ${c.senderName === 'AI Assistant' ? 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' : 'text-indigo-300 bg-indigo-500/10 border-indigo-500/20'} border rounded px-1.5 py-0.5">${c.senderName === 'AI Assistant' ? 'AI' : 'Admin'}</span>`
+          : '';
+        return `
+          <div class="${wrapClass}">
+            <div class="flex justify-between items-center gap-2">
+              <div class="flex items-center gap-2 min-w-0">
+                ${nested ? '<span class="text-indigo-400/70 text-xs">↳</span>' : ''}
+                <span class="text-xs font-semibold text-slate-300 truncate">${c.senderName}</span>
+                ${tag}
+              </div>
+              <span class="text-[10px] text-slate-500 flex-shrink-0">${time}</span>
             </div>
             <p class="text-xs text-slate-400 leading-relaxed">${c.text}</p>
           </div>
         `;
+      };
+
+      // Group replies under their parent comment; top-level comments keep order.
+      const topLevel = allComments.filter((c) => !c.parentId);
+      const repliesByParent = {};
+      allComments.filter((c) => c.parentId).forEach((c) => {
+        (repliesByParent[c.parentId] = repliesByParent[c.parentId] || []).push(c);
       });
-      
+      let commentsHtml = '';
+      topLevel.forEach((c) => {
+        commentsHtml += renderComment(c, false);
+        (repliesByParent[c.id] || []).forEach((r) => { commentsHtml += renderComment(r, true); });
+      });
+      // Replies whose parent isn't in this post (e.g. AI replies stored with unknown parent id) render flat.
+      allComments
+        .filter((c) => c.parentId && !topLevel.some((t) => t.id === c.parentId))
+        .forEach((c) => { commentsHtml += renderComment(c, true); });
+
       const imgTag = post.imageUrl ? `<img src="${post.imageUrl}" class="w-full max-h-[260px] rounded-xl object-cover border border-slate-800/60 mt-3">` : '';
       const dateStr = new Date(post.createdAt).toLocaleString();
-      
+      const failedBanner = post.autoReplyStatus === 'failed'
+        ? `<div class="px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-xl flex items-start gap-3 mb-2">
+             <svg class="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+             <div class="min-w-0">
+               <p class="text-xs font-bold text-red-300 tracking-wide uppercase">Auto-reply failed — manual takeover needed</p>
+               <p class="text-[11px] text-red-400/80 mt-0.5 break-words">${post.autoReplyError || 'Gemini or the Graph API returned an error.'}</p>
+             </div>
+           </div>`
+        : '';
+
       container.innerHTML = `
         <div class="p-6 border-b border-slate-800/85 bg-slate-950/5">
           <div class="flex items-center gap-3.5 mb-4">
@@ -766,7 +1060,8 @@
         </div>
         
         <div class="flex-1 overflow-y-auto p-6 border-t border-slate-800/85 flex flex-col gap-4">
-          <h3 class="text-xs font-semibold text-slate-400 tracking-wider uppercase">Comments (${post.comments.length})</h3>
+          ${failedBanner}
+          <h3 class="text-xs font-semibold text-slate-400 tracking-wider uppercase">Comments (${allComments.length})</h3>
           <div class="flex flex-col gap-3">${commentsHtml}</div>
         </div>
         

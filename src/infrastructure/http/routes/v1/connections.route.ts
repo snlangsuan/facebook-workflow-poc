@@ -7,6 +7,7 @@ import {
   getConnectionSpec,
   saveConnectionSpec,
   deleteConnectionSpec,
+  setPersonaSpec,
   getAvailablePagesSpec,
   getConfigSpec,
   loginSpec,
@@ -14,6 +15,8 @@ import {
 import {
   connectionCreatePayloadSchema,
   connectionParamPayloadSchema,
+  personaParamPayloadSchema,
+  personaUpdatePayloadSchema,
   loginPayloadSchema,
 } from '#/features/connections/v1/connection.schema'
 
@@ -47,4 +50,13 @@ connectionsRouter.delete(
   authMiddleware(),
   zValidator('param', connectionParamPayloadSchema),
   connectionController.deleteConnection,
+)
+
+connectionsRouter.patch(
+  '/:userId/:pageId/persona',
+  setPersonaSpec,
+  authMiddleware(),
+  zValidator('param', personaParamPayloadSchema),
+  zValidator('json', personaUpdatePayloadSchema),
+  connectionController.setPersona,
 )

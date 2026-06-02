@@ -1,11 +1,16 @@
 import { rtdb } from '#/common/libs/firebase.lib'
 import { formatToIso, getUtcTime } from '#/common/utils/datetime.util'
 
+export type TAutoReplyStatus = 'ok' | 'failed'
+
 export interface IFbPageConnection {
   id: string
   name: string
   accessToken: string
   userId: string
+  systemInstruction?: string
+  subscribed?: boolean
+  createdAt?: string
 }
 
 export interface IMessage {
@@ -14,6 +19,8 @@ export interface IMessage {
   senderName: string
   text: string
   timestamp: string
+  status?: 'sent' | 'failed'
+  error?: string
 }
 
 export interface IConversation {
@@ -23,6 +30,9 @@ export interface IConversation {
   lastMessage: string
   updatedAt: string
   messages: IMessage[]
+  pageId?: string
+  autoReplyStatus?: TAutoReplyStatus
+  autoReplyError?: string
 }
 
 export interface IComment {
@@ -30,6 +40,9 @@ export interface IComment {
   senderName: string
   text: string
   timestamp: string
+  parentId?: string | null
+  status?: 'sent' | 'failed'
+  error?: string
 }
 
 export interface IPost {
@@ -38,26 +51,83 @@ export interface IPost {
   imageUrl: string | null
   createdAt: string
   comments: IComment[]
+  pageId?: string
+  autoReplyStatus?: TAutoReplyStatus
+  autoReplyError?: string
+}
+
+/**
+ * Connections are stored per-user as a map of pageId -> connection so a single
+ * user can connect more than one Facebook Page. Legacy data that stored a single
+ * connection object directly under `connections/{userId}` is still read correctly.
+ */
+function flattenUserConnections(node: unknown): IFbPageConnection[] {
+  if (!node || typeof node !== 'object') {
+    return []
+  }
+  const obj = node as Record<string, unknown>
+  // Legacy single-connection shape.
+  if (typeof obj.accessToken === 'string') {
+    return [obj as unknown as IFbPageConnection]
+  }
+  return Object.values(obj).filter(
+    (v): v is IFbPageConnection =>
+      !!v && typeof v === 'object' && typeof (v as IFbPageConnection).accessToken === 'string',
+  )
 }
 
 export const dbService = {
   getConnections: async (): Promise<IFbPageConnection[]> => {
     const snapshot = await rtdb.ref('connections').once('value')
-    const val = snapshot.val() as Record<string, IFbPageConnection> | null
-    return val ? Object.values(val) : []
+    const val = snapshot.val() as Record<string, unknown> | null
+    if (!val) {
+      return []
+    }
+    return Object.values(val).flatMap((userNode) => flattenUserConnections(userNode))
   },
 
-  getConnectionByUserId: async (userId: string): Promise<IFbPageConnection | undefined> => {
+  getConnectionsByUserId: async (userId: string): Promise<IFbPageConnection[]> => {
     const snapshot = await rtdb.ref(`connections/${userId}`).once('value')
-    return (snapshot.val() as IFbPageConnection | null) || undefined
+    return flattenUserConnections(snapshot.val())
+  },
+
+  getConnectionByPageId: async (pageId: string): Promise<IFbPageConnection | undefined> => {
+    const all = await dbService.getConnections()
+    return all.find((c) => c.id === pageId)
   },
 
   saveConnection: async (connection: IFbPageConnection): Promise<void> => {
-    await rtdb.ref(`connections/${connection.userId}`).set(connection)
+    const ref = rtdb.ref(`connections/${connection.userId}/${connection.id}`)
+    const existing = (await ref.once('value')).val() as IFbPageConnection | null
+    // RTDB rejects `undefined` values, so only include optional fields when present.
+    const record: IFbPageConnection = {
+      id: connection.id,
+      name: connection.name,
+      accessToken: connection.accessToken,
+      userId: connection.userId,
+      createdAt: existing?.createdAt ?? formatToIso(),
+    }
+    const systemInstruction = connection.systemInstruction ?? existing?.systemInstruction
+    if (systemInstruction !== undefined) {
+      record.systemInstruction = systemInstruction
+    }
+    if (connection.subscribed !== undefined) {
+      record.subscribed = connection.subscribed
+    }
+    await ref.set(record)
   },
 
-  deleteConnection: async (userId: string): Promise<void> => {
-    await rtdb.ref(`connections/${userId}`).remove()
+  setSubscribed: async (userId: string, pageId: string, subscribed: boolean): Promise<void> => {
+    await rtdb.ref(`connections/${userId}/${pageId}/subscribed`).set(subscribed)
+  },
+
+  setSystemInstruction: async (userId: string, pageId: string, instruction: string): Promise<void> => {
+    await rtdb.ref(`connections/${userId}/${pageId}/systemInstruction`).set(instruction)
+  },
+
+  deleteConnection: async (userId: string, pageId?: string): Promise<void> => {
+    const path = pageId ? `connections/${userId}/${pageId}` : `connections/${userId}`
+    await rtdb.ref(path).remove()
   },
 
   getConversations: async (): Promise<IConversation[]> => {
@@ -78,6 +148,7 @@ export const dbService = {
     senderId: string,
     senderName: string,
     text: string,
+    opts?: { pageId?: string; status?: 'sent' | 'failed'; error?: string },
   ): Promise<IConversation> => {
     const timestamp = formatToIso()
     const msgId = `msg_${getUtcTime().valueOf()}`
@@ -91,6 +162,8 @@ export const dbService = {
       senderName,
       text,
       timestamp,
+      ...(opts?.status ? { status: opts.status } : {}),
+      ...(opts?.error ? { error: opts.error } : {}),
     }
 
     if (!conv) {
@@ -101,6 +174,7 @@ export const dbService = {
         lastMessage: text,
         updatedAt: timestamp,
         messages: [newMessage],
+        ...(opts?.pageId ? { pageId: opts.pageId } : {}),
       }
     } else {
       if (!conv.messages) {
@@ -109,8 +183,27 @@ export const dbService = {
       conv.messages.push(newMessage)
       conv.lastMessage = text
       conv.updatedAt = timestamp
+      if (opts?.pageId) {
+        conv.pageId = opts.pageId
+      }
     }
 
+    await ref.set(conv)
+    return conv
+  },
+
+  setConversationAutoStatus: async (
+    convId: string,
+    status: TAutoReplyStatus,
+    error?: string,
+  ): Promise<IConversation | undefined> => {
+    const ref = rtdb.ref(`conversations/${convId}`)
+    const conv = (await ref.once('value')).val() as IConversation | null
+    if (!conv) {
+      return undefined
+    }
+    conv.autoReplyStatus = status
+    conv.autoReplyError = error ?? ''
     await ref.set(conv)
     return conv
   },
@@ -127,20 +220,30 @@ export const dbService = {
     return (snapshot.val() as IPost | null) || undefined
   },
 
-  addPost: async (content: string, imageUrl: string | null): Promise<IPost> => {
-    const id = `post_${getUtcTime().valueOf()}`
+  addPost: async (
+    content: string,
+    imageUrl: string | null,
+    opts?: { id?: string; pageId?: string },
+  ): Promise<IPost> => {
+    const id = opts?.id || `post_${getUtcTime().valueOf()}`
     const post: IPost = {
       id,
       content,
       imageUrl,
       createdAt: formatToIso(),
       comments: [],
+      ...(opts?.pageId ? { pageId: opts.pageId } : {}),
     }
     await rtdb.ref(`posts/${id}`).set(post)
     return post
   },
 
-  addComment: async (postId: string, senderName: string, text: string): Promise<IComment | null> => {
+  addComment: async (
+    postId: string,
+    senderName: string,
+    text: string,
+    opts?: { id?: string; parentId?: string | null; status?: 'sent' | 'failed'; error?: string },
+  ): Promise<IComment | null> => {
     const ref = rtdb.ref(`posts/${postId}`)
     const snapshot = await ref.once('value')
     const post = snapshot.val() as IPost | null
@@ -149,10 +252,13 @@ export const dbService = {
     }
 
     const comment: IComment = {
-      id: `comment_${getUtcTime().valueOf()}`,
+      id: opts?.id || `comment_${getUtcTime().valueOf()}`,
       senderName,
       text,
       timestamp: formatToIso(),
+      parentId: opts?.parentId ?? null,
+      ...(opts?.status ? { status: opts.status } : {}),
+      ...(opts?.error ? { error: opts.error } : {}),
     }
 
     if (!post.comments) {
@@ -163,9 +269,42 @@ export const dbService = {
     return comment
   },
 
+  setPostAutoStatus: async (postId: string, status: TAutoReplyStatus, error?: string): Promise<IPost | undefined> => {
+    const ref = rtdb.ref(`posts/${postId}`)
+    const post = (await ref.once('value')).val() as IPost | null
+    if (!post) {
+      return undefined
+    }
+    post.autoReplyStatus = status
+    post.autoReplyError = error ?? ''
+    await ref.set(post)
+    return post
+  },
+
+  /**
+   * Idempotency guard. Atomically marks an event id as processed and returns `true`
+   * only the first time it is seen. Duplicate webhook deliveries return `false` and
+   * should be skipped. Aborting the transaction (returning undefined) when a value
+   * already exists yields `committed === false`.
+   */
+  markEventProcessedOnce: async (eventId: string): Promise<boolean> => {
+    // Facebook ids (mid / comment_id) may contain ".", "/", "=" which are illegal in RTDB
+    // keys, so encode to a key-safe form before using it as a path segment.
+    const safeKey = Buffer.from(eventId).toString('base64url')
+    const ref = rtdb.ref(`processed_events/${safeKey}`)
+    const result = await ref.transaction((current) => {
+      if (current) {
+        return undefined
+      }
+      return { processedAt: formatToIso() }
+    })
+    return result.committed
+  },
+
   resetMockData: async (): Promise<void> => {
     await rtdb.ref('connections').remove()
     await rtdb.ref('conversations').remove()
     await rtdb.ref('posts').remove()
+    await rtdb.ref('processed_events').remove()
   },
 }

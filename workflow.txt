@@ -1,0 +1,139 @@
+ช่วยสร้างแอพ demo สำหรับ การใช้งาน Graph API ของ Facebook เพื่อรองรับการทำงานของ Facebook App ร่วมกับ Gemini AI Automation โดยมีการทำงานที่ครอบคลุมข้อกำหนดทางเทคนิคและแนวปฏิบัติที่ดีที่สุด (Best Practices) ดังนี้:
+
+### 1. User Authentication & Authorization (การยืนยันตัวตนและการขอสิทธิ์)
+- **Firebase Authentication:** 
+  - ผู้ใช้งาน Login ด้วย Firebase Auth (ใช้ Email/Password ที่สร้างไว้ล่วงหน้าผ่าน Firebase Console)
+- **Facebook Login Integration:**
+  - เมื่อ User Login แล้ว ให้แสดงรายการ Facebook Page ที่เชื่อมต่อ
+  - หาก User ยังไม่เคยทำ Facebook Login ผ่าน App นี้ หรือสิทธิ์หมดอายุ ให้เปลี่ยนเส้นทางไปยังหน้า Facebook OAuth Login
+  - **Permissions (Scopes)** ที่ต้องขอจาก User: `pages_show_list`, `pages_read_engagement`, `pages_manage_metadata`, `pages_manage_posts`, `pages_messaging`
+  - User สามารถเลือกเชื่อมต่อ Facebook Page ได้มากกว่า 1 เพจ
+
+### 2. Token Lifecycle Management (การจัดการอายุของ Token) 🔑
+- **Exchange Token Flow:**
+  - เมื่อ User กดเชื่อมต่อเพจสำเร็จ ระบบจะได้รับ Short-lived User Access Token จาก Frontend
+  - Backend ต้องทำหน้าที่แลกเปลี่ยน Short-lived Token นั้นเป็น **Long-lived User Access Token** (อายุ 60 วัน) จากนั้นจึงแลกต่อให้เป็น **Long-lived Page Access Token** (ไม่มีวันหมดอายุ - Never Expiring) ของแต่ละเพจ
+  - บันทึก Long-lived Page Access Token ลงใน Firestore ภายใต้เพจที่เชื่อมต่ออย่างปลอดภัย (แนะนำให้เข้ารหัสหรือปกป้องสิทธิ์การเข้าถึงอย่างรัดกุม) เพื่อนำมาใช้ในการเรียก API ในอนาคต
+- **Auto-Subscription:**
+  - ทันทีที่เชื่อมต่อเพจสำเร็จ ระบบต้องยิง POST Request ไปยัง endpoint `/{page-id}/subscribed_apps` โดยใช้ Page Access Token เพื่อสมัครรับ event `feed` และ `messages` โดยอัตโนมัติ
+
+### 3. Webhook Setup & Security (การตั้งค่าและความปลอดภัยของ Webhook) 🛡️
+- **Endpoint:** `https://[YOUR_BASE_URL]/api/v1/interactions/webhook`
+- **Webhook Verification (GET Handler):**
+  - รองรับการตอบกลับท้าทาย (Challenge) จาก Facebook โดยรับ Query Parameters `hub.mode`, `hub.verify_token`, `hub.challenge` และส่งกลับ `hub.challenge` เมื่อตรวจสอบ `verify_token` ตรงกับค่าที่บันทึกในระบบของเรา
+- **Signature Validation (POST Handler):**
+  - ตรวจสอบความถูกต้องของ Payload ทุกครั้งที่มี Event ส่งเข้ามา โดยการคำนวณ Signature ร่วมกับ Facebook App Secret และเปรียบเทียบกับ Header `X-Hub-Signature-256` เพื่อป้องกันการยิง Request ปลอมจากภายนอก
+
+### 4. Webhook Event Driven & Queue Management (การตอบสนองและจัดการคิวแบบ Asynchronous) 🔄
+- **Immediate Response (Avoid Timeout & Duplicate Replies):**
+  - เมื่อระบบได้รับ Webhook POST Event และตรวจสอบลายเซ็นสำเร็จแล้ว ให้บันทึกข้อมูลดิบลงใน **Firebase Realtime Database (Webhook Queue)** ทันที
+  - ส่ง HTTP Status `200 OK` กลับไปยัง Facebook ทันที (ภายใน 2-3 วินาที) เพื่อยืนยันการรับข้อมูลสำเร็จ ป้องกันไม่ให้ Facebook ส่ง Event ซ้ำเนื่องจากประมวลผล Gemini นานเกินไป
+- **Background Processing & Deduplication (Idempotency):**
+  - มี Worker หรือ Background Service ที่คอยดึงข้อมูลจาก Webhook Queue ไปประมวลผลต่อ (Flow 5 และ 6)
+  - ตรวจสอบว่า Event ID (`comment_id` หรือ `message_id`) นี้เคยถูกประมวลผลไปแล้วหรือยัง เพื่อป้องกันการตอบกลับลูกค้าซ้ำซ้อนซ้ำหลายรอบ
+
+### 5. Flow เมื่อมี Comment ใหม่เข้ามา (Facebook Feed Comments)
+- **Database Checking:**
+  - หาก `post_id` ที่มี Comment เข้ามาใหม่ ยังไม่เคยถูกจัดเก็บใน Firestore ให้ดึงข้อมูลรายละเอียดของโพสต์นั้น รวมถึง Comment ทั้งหมดที่มีอยู่ในโพสต์นั้นมาเก็บใน Firestore เป็นประวัติเริ่มต้น
+  - หากมีข้อมูลโพสต์ในระบบอยู่แล้ว ให้บันทึกเฉพาะ Comment ใหม่นั้นลง Firestore
+- **Gemini AI Reply Generation:**
+  - ส่งข้อความของ Comment นั้นไปให้ **Gemini SDK (@google/genai)** เพื่อประเมิน วิเคราะห์ และสร้างคำตอบที่สุภาพและเหมาะสม
+  - สามารถตั้งค่า **System Instruction (AI Persona)** ของแต่ละเพจได้ผ่านทาง Firestore (เช่น สไตล์การพูด, ข้อห้าม, คำลงท้าย) และส่งคำสั่งนี้ไปพร้อมกับ Gemini
+- **Facebook Reply API:**
+  - ส่งคำตอบกลับไปยัง Facebook Comment ต้นฉบับผ่านทาง Graph API โดยอัตโนมัติโดยใช้ Page Access Token
+  - อัปเดตสถานะการประมวลผลและการส่งคำตอบลงใน Firestore
+
+### 6. Flow เมื่อมี Inbox Message ใหม่เข้ามา (Facebook Page Messenger)
+- **Database Storing:**
+  - บันทึกข้อมูลข้อความ (Message) ลงใน Firestore ในส่วนของบทสนทนา (Conversations)
+- **Contextual Gemini Generation:**
+  - ส่งข้อความที่ได้รับล่าสุดร่วมกับ **ประวัติบทสนทนาล่าสุด (Conversation Context)** ย้อนหลัง 5-10 ข้อความในห้องแชทนั้น เพื่อให้ Gemini มีบริบทประวัติการคุยที่ต่อเนื่อง และตอบได้อย่างเป็นธรรมชาติ
+  - แนบ **System Instruction (AI Persona)** ร่วมไปด้วยในการสร้างคำตอบ
+- **Facebook Messenger Send API:**
+  - ส่งคำตอบที่ได้จาก Gemini กลับไปยัง Inbox ของห้องสนทนาต้นฉบับโดยอัตโนมัติ
+  - บันทึกข้อความตอบกลับของบอทลง Firestore
+
+### 7. User Interface (Demo UI & Fallback System) 💻
+- **Navigation (Page-Centric):**
+  - เมนูด้านซ้ายแสดงเป็น **รายการเพจ (Connected Pages)** ที่ผู้ใช้เชื่อมต่อไว้ โดยแต่ละเพจมีเมนูย่อย 2 รายการคือ **Inbox** (บทสนทนา Messenger) และ **Feed** (โพสต์ + คอมเมนต์)
+  - เมื่อเลือกเมนูย่อยของเพจใด ระบบจะสลับเพจที่ใช้งาน (active page) และกรองรายการให้แสดงเฉพาะข้อมูลของเพจนั้น (กรองด้วย `pageId`)
+  - มีปุ่ม **+ Add Page** เพื่อเชื่อมต่อเพจเพิ่ม และปุ่ม **AI Persona** เพื่อตั้งค่า System Instruction ของเพจที่กำลังเลือก
+- **List Conversations:**
+  - แสดงรายการห้องสนทนา (Conversations) ของเพจที่เลือก ดึงข้อมูลเรียลไทม์ผ่าน Server-Sent Events (SSE) / `onSnapshot`
+- **Conversation Detail:**
+  - แสดงข้อความทั้งหมดในแชทนั้นแบบเรียลไทม์
+  - มีช่องสำหรับให้มนุษย์ (แอดมิน) พิมพ์ตอบกลับ (Reply) เองแบบ Manual
+- **List Posts:**
+  - แสดงรายการโพสต์ทั้งหมดที่มีอยู่ในระบบ
+- **Post Detail:**
+  - แสดงรายละเอียดของโพสต์ไว้ในอันดับแรกสุด ถัดลงมาเป็นรายการ Comment และการตอบกลับของคอมเมนต์ย่อย
+  - มีปุ่ม/ช่องให้แอดมินสามารถป้อนข้อความตอบกลับ (Reply) คอมเมนต์ได้ด้วยตัวเอง
+- **Manual Takeover & Error Alert:**
+  - หากการตอบกลับอัตโนมัติของ Gemini หรือ Facebook API เกิดข้อผิดพลาด (เช่น Safety Block, Token Expired) ให้เปลี่ยนสถานะการตอบกลับของบอทเป็น `failed` (เก็บที่ `autoReplyStatus` ของ Conversation/Post) พร้อมแสดงแถบเตือน (banner) และ badge "Needs Reply" ให้แอดมินเพจเห็นบนหน้าจอ เพื่อให้แอดมินกดตอบเองได้แบบ Manual Fallback
+
+---
+
+### 8. Implementation Notes (สถานะการพัฒนา / สรุปสำหรับนักพัฒนา) 🧩
+
+**Tech Stack:** Bun + Hono + TypeScript, Firebase Admin (Realtime Database), Gemini SDK (`@google/genai`)
+
+**Webhook & Endpoints หลัก (prefix `/api/v1`):**
+- `GET  /interactions/webhook` — Verification challenge (hub.mode / hub.verify_token / hub.challenge)
+- `POST /interactions/webhook` — รับ event, ตรวจ `X-Hub-Signature-256`, บันทึกลง Webhook Queue (RTDB) แล้วตอบ 200 ทันที
+- `GET  /interactions/events` — SSE stream สำหรับอัปเดต UI แบบเรียลไทม์
+- `GET  /interactions/conversations` , `GET /interactions/conversations/:id`
+- `POST /interactions/messages/reply` — แอดมินตอบ Inbox เอง (Manual)
+- `GET  /interactions/posts` , `GET /interactions/posts/:id`
+- `POST /interactions/comments/reply` — แอดมินตอบคอมเมนต์เอง (Manual)
+- `POST /connections/login` — Firebase Auth (Email/Password)
+- `GET  /connections/config` — public config (FB App ID ฯลฯ)
+- `GET  /connections/pages?token=...` — แลก Short-lived → Long-lived User Token แล้วดึงรายการเพจ (พร้อม Long-lived Page Token)
+- `GET  /connections/:userId` — รายการเพจที่ผู้ใช้เชื่อมต่อ (รองรับหลายเพจ)
+- `POST /connections` — บันทึกเพจ + Auto-subscribe (`feed`,`messages`) อัตโนมัติ
+- `PATCH /connections/:userId/:pageId/persona` — ตั้งค่า AI Persona (System Instruction) ต่อเพจ
+- `DELETE /connections/:userId` — ตัดการเชื่อมต่อ (ระบุ `?pageId=` เพื่อลบเฉพาะเพจได้)
+
+**Background Worker:** ฝังในโปรเซสเดียวกับเซิร์ฟเวอร์ (`src/worker`), ฟัง Webhook Queue, ใช้ transaction กันการประมวลผลซ้อน และตรวจ Idempotency ด้วย `message_id`/`comment_id` (เก็บที่ `processed_events`)
+
+**Environment Variables ที่เกี่ยวข้อง:**
+- `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET`, `FACEBOOK_VERIFY_TOKEN`, `FACEBOOK_GRAPH_VERSION`
+- `GEMINI_API_KEY` (เว้นว่างเพื่อใช้ Vertex AI ผ่าน Service Account), `GEMINI_MODEL`, `GEMINI_DEFAULT_PERSONA`
+- `BASE_URL` (ต้องเป็น public HTTPS เช่น ngrok/cloudflared เมื่อเชื่อมต่อ Facebook จริง)
+
+**หมายเหตุด้านข้อมูล:** Demo นี้ใช้ Firebase **Realtime Database** เป็นที่จัดเก็บหลัก (Connections / Conversations / Posts / Webhook Queue / Processed Events) — หากต้องการย้ายส่วน Firestore ตามสเปกเดิม สามารถปรับ Layer `db.lib.ts` ได้ในภายหลัง
+
+---
+
+### 9. Setup Runbook & Known Pitfalls (คู่มือสำหรับครั้งหน้า — กันเจอปัญหาเดิม) 🧭
+
+แบ่งงานเป็น 2 ฝั่งชัดเจน: สิ่งที่ **AI Agent / โค้ด** ทำให้อัตโนมัติ และสิ่งที่ **Human ต้องไปตั้งเองใน Facebook/Cloud** (Agent ทำแทนไม่ได้)
+
+#### 9.1 ✅ ส่วนที่ Agent/โค้ดทำให้ (Automated)
+- แลก Token ครบวงจร: Short-lived User → Long-lived User (60 วัน) → Long-lived Page Token (`connection.service.ts`)
+- Auto-subscribe เพจเข้ากับ App ผ่าน `POST /{page-id}/subscribed_apps` (fields: `feed`,`messages`) ทันทีที่เชื่อมเพจ
+- Webhook GET challenge + POST signature validation (`X-Hub-Signature-256`)
+- Queue + Worker + Idempotency (กันตอบซ้ำ) + Gemini auto-reply + Manual fallback (สถานะ `failed`)
+- UI: เพจ → (Inbox, Feed), AI Persona ต่อเพจ, เชื่อมหลายเพจ
+
+#### 9.2 ⚠️ ส่วนที่ Human ต้องทำเองใน Facebook App Dashboard (Agent ทำแทนไม่ได้)
+ทำที่ developers.facebook.com → App ของคุณ:
+1. **Add Products:** Facebook Login, Webhooks, Messenger
+2. **Settings → Basic:** ใส่ App Domains = โดเมน public (ngrok/cloudflared), Privacy Policy URL, และ **App Secret ต้องตรงกับ `FACEBOOK_APP_SECRET` ใน .env**
+3. **Facebook Login → Settings:**
+   - "Login with the JavaScript SDK" = **Yes**
+   - Allowed Domains for the JavaScript SDK = โดเมน public
+   - Valid OAuth Redirect URIs = `https://<public-domain>/`
+4. **Webhooks → Page (สำคัญสุด — ลืมบ่อย):**
+   - Callback URL = `https://<public-domain>/api/v1/interactions/webhook`
+   - Verify Token = ค่าเดียวกับ `FACEBOOK_VERIFY_TOKEN`
+   - กด **Verify and Save** แล้ว **Subscribe** field `messages` และ `feed` **ที่ระดับ App** (subscribed_apps ที่โค้ดยิงให้ ผูกแค่ app↔page เท่านั้น ยังต้องตั้ง App-level เองด้วย)
+5. **App Roles:** ตอน Development Mode webhook `messages` จะส่ง **เฉพาะข้อความจากบัญชี Admin/Developer/Tester ของแอป** — ทดสอบด้วยบัญชีที่เป็น role เท่านั้น
+6. **Infra:** เปิด ngrok/cloudflared ชี้ `localhost:8000`, อัปเดต `BASE_URL` ใน .env, restart server, และเปิด Vertex AI API ใน GCP project (ถ้าใช้ Gemini ผ่าน Service Account)
+
+#### 9.3 🐞 Known Pitfalls (บั๊กที่เคยเจอ — ระวังเมื่อแก้ไขโค้ด)
+- **RTDB ห้ามมีค่า `undefined`** ใน `.set()` → ต้องไม่ใส่ field optional ที่ยังไม่มีค่า (เคยทำ `saveConnection` 500)
+- **RTDB key ห้ามมี `. # $ [ ] /`** → Facebook `mid`/`comment_id` มีอักขระพวกนี้ ต้อง encode (เช่น base64url) ก่อนใช้เป็น path เด็ดขาด (เคยทำ worker fail เงียบทุกข้อความ — `processed_events/<mid>`)
+- **Webhook เงียบ แต่โค้ดไม่ error** → เกือบทุกครั้งคือฝั่ง Facebook ไม่ได้ส่ง (ข้อ 9.2 ข้อ 4–5) ไม่ใช่บั๊กโค้ด → วิธีแยก: เปิด ngrok inspector `http://localhost:4040` แล้วส่งข้อความ ถ้าไม่เห็น `POST /api/v1/interactions/webhook` = Facebook ไม่ส่ง
+- **ngrok free มีหน้า interstitial** อาจคั่น verification ของ Facebook → ถ้า verify ไม่ผ่านให้ลองใช้ cloudflared แทน
+- **`GEMINI_MODEL`** ต้องเป็นชื่อ model ที่มีอยู่จริง (เช่น `gemini-2.5-flash`) มิฉะนั้น auto-reply จะ fail
+- **Diagnostic:** ดูสถานะจริงได้จาก RTDB paths: `connections`, `webhook_queue` (status `pending`/`processing`/`failed` + `error`), `conversations`, `processed_events`

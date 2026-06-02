@@ -1,0 +1,9 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "webhook_queue": {
+      ".indexOn": ["status"]
+    }
+  }
+}

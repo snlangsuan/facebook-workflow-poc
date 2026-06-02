@@ -43,6 +43,16 @@ export const getAvailablePagesSpec = describeRoute({
   },
 })
 
+export const setPersonaSpec = describeRoute({
+  tags: ['Connections'],
+  summary: 'Set the AI persona (system instruction) for a connected page',
+  responses: {
+    200: {
+      description: 'Persona updated successfully',
+    },
+  },
+})
+
 export const getConfigSpec = describeRoute({
   tags: ['Connections'],
   summary: 'Get public configuration parameters',

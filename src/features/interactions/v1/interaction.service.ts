@@ -1,8 +1,11 @@
 import { dbService } from '#/common/libs/db.lib'
+import { geminiService } from '#/common/libs/gemini.lib'
 import { logger } from '#/common/libs/logger.lib'
+import { envVariables } from '#/factory'
 import { interactionRepository } from '#/features/interactions/v1/interaction.repository'
 
-import type { IConversation, IComment, IPost } from '#/common/libs/db.lib'
+import type { IConversation, IComment, IFbPageConnection, IMessage, IPost } from '#/common/libs/db.lib'
+import type { IGeminiHistoryItem } from '#/common/libs/gemini.lib'
 import type {
   TCustomerPostPayload,
   TCustomerMessagePayload,
@@ -10,6 +13,9 @@ import type {
   TMessageReplyPayload,
   TCommentReplyPayload,
 } from '#/features/interactions/v1/interaction.type'
+
+const GRAPH = `https://graph.facebook.com/${envVariables.FACEBOOK_GRAPH_VERSION}`
+const HISTORY_LIMIT = 10
 
 type TSseListener = (data: string) => void
 const sseListeners: TSseListener[] = []
@@ -33,6 +39,55 @@ export const sseBroker = {
   },
 }
 
+async function resolveConnection(pageId?: string): Promise<IFbPageConnection | undefined> {
+  if (pageId) {
+    const byPage = await dbService.getConnectionByPageId(pageId)
+    if (byPage) {
+      return byPage
+    }
+  }
+  const conns = await dbService.getConnections()
+  return conns[0]
+}
+
+function resolvePersona(conn?: IFbPageConnection): string {
+  return conn?.systemInstruction?.trim() || envVariables.GEMINI_DEFAULT_PERSONA
+}
+
+function toHistory(messages: IMessage[]): IGeminiHistoryItem[] {
+  return messages.slice(-HISTORY_LIMIT).map((m) => ({
+    role: m.senderId === 'page' ? 'model' : 'user',
+    text: m.text,
+  }))
+}
+
+async function sendMessengerReply(pageAccessToken: string, recipientId: string, text: string): Promise<void> {
+  const res = await fetch(`${GRAPH}/me/messages?access_token=${pageAccessToken}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      recipient: { id: recipientId },
+      message: { text },
+    }),
+  })
+  if (!res.ok) {
+    const err = (await res.json()) as unknown as Record<string, unknown>
+    throw new Error(`Messenger Send API error: ${JSON.stringify(err)}`)
+  }
+}
+
+async function sendCommentReply(pageAccessToken: string, targetId: string, text: string): Promise<void> {
+  const res = await fetch(`${GRAPH}/${targetId}/comments?access_token=${pageAccessToken}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: text }),
+  })
+  if (!res.ok) {
+    const err = (await res.json()) as unknown as Record<string, unknown>
+    throw new Error(`Graph Comment API error: ${JSON.stringify(err)}`)
+  }
+}
+
 export const interactionService = {
   async listConversations(): Promise<IConversation[]> {
     return interactionRepository.listConversations()
@@ -42,6 +97,11 @@ export const interactionService = {
     return interactionRepository.getConversation(id)
   },
 
+  /**
+   * Flow 6: store the incoming message, then auto-generate a contextual Gemini reply
+   * (persona + recent conversation history) and send it back via the Messenger Send API.
+   * On any failure the conversation is flagged `failed` for manual admin takeover.
+   */
   async receiveCustomerMessage(payload: TCustomerMessagePayload): Promise<IConversation> {
     const conv = await interactionRepository.addMessage(
       payload.senderId,
@@ -49,9 +109,43 @@ export const interactionService = {
       payload.senderId,
       payload.senderName,
       payload.text,
+      { pageId: payload.pageId },
     )
     sseBroker.broadcast('conversation_updated', conv)
-    return conv
+
+    const conn = await resolveConnection(payload.pageId)
+    try {
+      const previousMessages = conv.messages.slice(0, -1)
+      const reply = await geminiService.generateReply({
+        systemInstruction: resolvePersona(conn),
+        history: toHistory(previousMessages),
+        message: payload.text,
+      })
+
+      if (conn?.accessToken) {
+        await sendMessengerReply(conn.accessToken, payload.senderId, reply)
+      } else {
+        logger.warn('No page connection/token available; storing Gemini reply without sending')
+      }
+
+      const updated = await interactionRepository.addMessage(
+        payload.senderId,
+        conv.name,
+        'page',
+        'AI Assistant',
+        reply,
+        { pageId: payload.pageId, status: 'sent' },
+      )
+      await dbService.setConversationAutoStatus(payload.senderId, 'ok')
+      sseBroker.broadcast('conversation_updated', { ...updated, autoReplyStatus: 'ok' })
+      return updated
+    } catch (error) {
+      const err = error as Error
+      logger.error(err, 'Auto-reply (message) failed; flagging for manual takeover')
+      const failed = await dbService.setConversationAutoStatus(payload.senderId, 'failed', err.message)
+      sseBroker.broadcast('conversation_updated', failed ?? conv)
+      return failed ?? conv
+    }
   },
 
   async replyToMessage(payload: TMessageReplyPayload): Promise<IConversation | null> {
@@ -60,24 +154,12 @@ export const interactionService = {
       return null
     }
 
-    const conns = await dbService.getConnections()
-    const conn = conns[0]
-    if (conn && conn.accessToken) {
+    const conn = await resolveConnection(conv.pageId)
+    if (conn?.accessToken) {
       try {
-        const res = await fetch(`https://graph.facebook.com/v18.0/me/messages?access_token=${conn.accessToken}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            recipient: { id: payload.conversationId },
-            message: { text: payload.text },
-          }),
-        })
-        if (!res.ok) {
-          const err = (await res.json()) as unknown as Record<string, unknown>
-          logger.error(err, 'Failed to post Messenger reply')
-        }
+        await sendMessengerReply(conn.accessToken, payload.conversationId, payload.text)
       } catch (error) {
-        logger.error(error, 'Messenger Graph API connection failure')
+        logger.error(error, 'Manual Messenger reply failed')
       }
     }
 
@@ -87,8 +169,11 @@ export const interactionService = {
       'page',
       'Page Admin',
       payload.text,
+      { pageId: conv.pageId, status: 'sent' },
     )
-    sseBroker.broadcast('conversation_updated', updated)
+    // Admin has taken over, clear the failed flag.
+    await dbService.setConversationAutoStatus(payload.conversationId, 'ok')
+    sseBroker.broadcast('conversation_updated', { ...updated, autoReplyStatus: 'ok' })
     return updated
   },
 
@@ -101,12 +186,59 @@ export const interactionService = {
   },
 
   async receiveCustomerPost(payload: TCustomerPostPayload): Promise<IPost> {
+    // Avoid overwriting a post (and its comments) that was already seeded — e.g. when a
+    // comment webhook arrived before the post-creation webhook.
+    if (payload.postId) {
+      const existing = await interactionRepository.getPost(payload.postId)
+      if (existing) {
+        return existing
+      }
+    }
     const post = await interactionRepository.addPost(payload)
     sseBroker.broadcast('posts_updated', post)
     return post
   },
 
+  /**
+   * Ensure the post that a comment belongs to exists locally. If the post-creation
+   * webhook was never captured (Facebook may send `item: status` etc.), fetch the post
+   * from the Graph API and seed it so the comment can attach. Falls back to a placeholder.
+   */
+  async ensurePostExists(postId: string, pageId?: string): Promise<IPost> {
+    const existing = await interactionRepository.getPost(postId)
+    if (existing) {
+      return existing
+    }
+
+    const conn = await resolveConnection(pageId)
+    let content = '(Facebook post)'
+    let imageUrl: string | null = null
+    if (conn?.accessToken) {
+      try {
+        const res = await fetch(`${GRAPH}/${postId}?fields=message,full_picture&access_token=${conn.accessToken}`)
+        if (res.ok) {
+          const data = (await res.json()) as { message?: string; full_picture?: string }
+          content = data.message || content
+          imageUrl = data.full_picture || null
+        }
+      } catch (error) {
+        logger.error(error, 'Failed to fetch post details from Graph API')
+      }
+    }
+
+    const post = await interactionRepository.addPost({ content, imageUrl, postId, pageId })
+    sseBroker.broadcast('posts_updated', post)
+    return post
+  },
+
+  /**
+   * Flow 5: store the incoming comment, then auto-generate a Gemini reply and post it
+   * back to the originating comment via the Graph API. Failures flag the post `failed`.
+   */
   async receiveCustomerComment(payload: TCustomerCommentPayload): Promise<IComment | null> {
+    // Self-heal: make sure the post exists before attaching the comment.
+    await interactionService.ensurePostExists(payload.postId, payload.pageId)
+
     const comment = await interactionRepository.addComment(payload)
     if (!comment) {
       return null
@@ -116,46 +248,61 @@ export const interactionService = {
     if (post) {
       sseBroker.broadcast('post_updated', post)
     }
-    return comment
+
+    const conn = await resolveConnection(post?.pageId)
+    try {
+      const reply = await geminiService.generateReply({
+        systemInstruction: resolvePersona(conn),
+        message: payload.text,
+      })
+
+      if (conn?.accessToken) {
+        // Reply to the specific comment when its id is known, else to the post.
+        await sendCommentReply(conn.accessToken, payload.commentId || payload.postId, reply)
+      } else {
+        logger.warn('No page connection/token available; storing Gemini comment reply without sending')
+      }
+
+      await dbService.addComment(payload.postId, 'AI Assistant', reply, {
+        parentId: payload.commentId ?? null,
+        status: 'sent',
+      })
+      const okPost = await dbService.setPostAutoStatus(payload.postId, 'ok')
+      if (okPost) {
+        sseBroker.broadcast('post_updated', okPost)
+      }
+      return comment
+    } catch (error) {
+      const err = error as Error
+      logger.error(err, 'Auto-reply (comment) failed; flagging for manual takeover')
+      const failedPost = await dbService.setPostAutoStatus(payload.postId, 'failed', err.message)
+      if (failedPost) {
+        sseBroker.broadcast('post_updated', failedPost)
+      }
+      return comment
+    }
   },
 
   async replyToComment(payload: TCommentReplyPayload): Promise<IComment | null> {
-    const conns = await dbService.getConnections()
-    const conn = conns[0]
-    if (conn && conn.accessToken) {
+    const post = await interactionRepository.getPost(payload.postId)
+    const conn = await resolveConnection(post?.pageId)
+    if (conn?.accessToken) {
       try {
-        const res = await fetch(
-          `https://graph.facebook.com/v18.0/${payload.postId}/comments?access_token=${conn.accessToken}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              message: payload.text,
-            }),
-          },
-        )
-        if (!res.ok) {
-          const err = (await res.json()) as unknown as Record<string, unknown>
-          logger.error(err, 'Failed to post comment reply')
-        }
+        await sendCommentReply(conn.accessToken, payload.postId, payload.text)
       } catch (error) {
-        logger.error(error, 'Feed Graph API connection failure')
+        logger.error(error, 'Manual comment reply failed')
       }
     }
 
-    const comment = await interactionRepository.addComment({
-      postId: payload.postId,
-      senderName: 'Page Admin',
-      text: payload.text,
-    })
-
+    const comment = await dbService.addComment(payload.postId, 'Page Admin', payload.text, { status: 'sent' })
     if (!comment) {
       return null
     }
 
-    const post = await interactionRepository.getPost(payload.postId)
-    if (post) {
-      sseBroker.broadcast('post_updated', post)
+    await dbService.setPostAutoStatus(payload.postId, 'ok')
+    const updatedPost = await interactionRepository.getPost(payload.postId)
+    if (updatedPost) {
+      sseBroker.broadcast('post_updated', updatedPost)
     }
     return comment
   },

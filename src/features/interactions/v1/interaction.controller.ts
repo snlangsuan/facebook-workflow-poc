@@ -1,8 +1,12 @@
+import crypto from 'node:crypto'
+
 import { streamSSE } from 'hono/streaming'
 
 import { rtdb } from '#/common/libs/firebase.lib'
+import { logger } from '#/common/libs/logger.lib'
 import { successResponseSchema } from '#/common/schemas/share.schema'
 import { formatToIso } from '#/common/utils/datetime.util'
+import { envVariables } from '#/factory'
 import { interactionService, sseBroker } from '#/features/interactions/v1/interaction.service'
 
 import type { JsonInputSchema, ParamInputSchema, QueryInputSchema } from '#/common/types/app.type'
@@ -14,6 +18,31 @@ import type {
   TCommentReplyPayload,
 } from '#/features/interactions/v1/interaction.type'
 import type { Context, Env, Input } from 'hono'
+
+/**
+ * Validate the Facebook webhook payload signature (`X-Hub-Signature-256`).
+ * Computes HMAC-SHA256 of the raw body with the app secret and compares in
+ * constant time. When the app secret is not configured (demo mode), validation
+ * is skipped so the POC remains runnable.
+ */
+function isValidSignature(rawBody: string, signatureHeader?: string): boolean {
+  const appSecret = envVariables.FACEBOOK_APP_SECRET
+  if (!appSecret || appSecret === '<secret>') {
+    logger.warn('FACEBOOK_APP_SECRET not configured; skipping webhook signature validation')
+    return true
+  }
+  if (!signatureHeader || !signatureHeader.startsWith('sha256=')) {
+    return false
+  }
+  const expected = crypto.createHmac('sha256', appSecret).update(rawBody).digest('hex')
+  const received = signatureHeader.slice('sha256='.length)
+  const expectedBuf = Buffer.from(expected, 'hex')
+  const receivedBuf = Buffer.from(received, 'hex')
+  if (expectedBuf.length !== receivedBuf.length) {
+    return false
+  }
+  return crypto.timingSafeEqual(expectedBuf, receivedBuf)
+}
 
 export const interactionController = {
   verifyWebhook: async <E extends Env, P extends string, I extends Input & QueryInputSchema<TWebhookVerifyQuery>>(
@@ -33,25 +62,22 @@ export const interactionController = {
   },
 
   receiveWebhook: async <E extends Env, P extends string, I extends Input>(c: Context<E, P, I>) => {
-    const body = (await c.req.json()) as {
+    // Read the raw body so the X-Hub-Signature-256 can be verified against the exact bytes.
+    const rawBody = await c.req.text()
+
+    if (!isValidSignature(rawBody, c.req.header('x-hub-signature-256'))) {
+      logger.warn('Rejected webhook with invalid X-Hub-Signature-256')
+      return c.json({ success: false, error: 'Invalid signature' }, 401)
+    }
+
+    let body: {
       object?: string
-      entry?: Array<{
-        messaging?: Array<{
-          sender?: { id: string }
-          message?: { text: string }
-        }>
-        changes?: Array<{
-          field: string
-          value: {
-            item: string
-            verb: string
-            post_id?: string
-            message?: string
-            from?: { name: string }
-            photos?: string[]
-          }
-        }>
-      }>
+      entry?: unknown[]
+    }
+    try {
+      body = JSON.parse(rawBody) as { object?: string; entry?: unknown[] }
+    } catch {
+      return c.json({ success: false, error: 'Invalid JSON payload' }, 400)
     }
 
     if (body.object === 'page' && body.entry) {

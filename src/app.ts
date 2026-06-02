@@ -9,9 +9,19 @@ const app = new Hono()
 
 app.use('*', cors())
 
-app.route('/api/v1', v1Router)
+// The whole app (API + static frontend) is served under the /demo prefix.
+app.get('/', (c) => c.redirect('/demo/'))
+app.get('/demo', (c) => c.redirect('/demo/'))
 
-app.use('/*', serveStatic({ root: './src/public' }))
+app.route('/demo/api/v1', v1Router)
+
+app.use(
+  '/demo/*',
+  serveStatic({
+    root: './src/public',
+    rewriteRequestPath: (path) => path.replace(/^\/demo/, '') || '/',
+  }),
+)
 
 app.onError((err, c) => {
   logger.error(err, 'Server error occurred')

@@ -1,5 +1,5 @@
 import { successResponseSchema } from '#/common/schemas/share.schema'
-import { connectionResponseSchema } from '#/features/connections/v1/connection.schema'
+import { connectionListResponseSchema } from '#/features/connections/v1/connection.schema'
 import { connectionService } from '#/features/connections/v1/connection.service'
 
 import type { JsonInputSchema, ParamInputSchema } from '#/common/types/app.type'
@@ -7,6 +7,8 @@ import type {
   TConnectionCreatePayload,
   TConnectionParamPayload,
   TConnectionResponse,
+  TPersonaParamPayload,
+  TPersonaUpdatePayload,
   TLoginPayload,
 } from '#/features/connections/v1/connection.type'
 import type { Context, Env, Input } from 'hono'
@@ -16,11 +18,8 @@ export const connectionController = {
     c: Context<E, P, I>,
   ) => {
     const { userId } = c.req.valid('param')
-    const conn = await connectionService.getConnection(userId)
-    if (!conn) {
-      return c.json({ success: false, error: 'Connection not found' }, 404)
-    }
-    return c.json<TConnectionResponse>(connectionResponseSchema.parse(conn))
+    const conns = await connectionService.getConnections(userId)
+    return c.json(connectionListResponseSchema.parse(conns))
   },
 
   saveConnection: async <E extends Env, P extends string, I extends Input & JsonInputSchema<TConnectionCreatePayload>>(
@@ -28,7 +27,7 @@ export const connectionController = {
   ) => {
     const payload = c.req.valid('json')
     const conn = await connectionService.saveConnection(payload)
-    return c.json<TConnectionResponse>(connectionResponseSchema.parse(conn))
+    return c.json<TConnectionResponse>(conn)
   },
 
   deleteConnection: async <
@@ -39,7 +38,21 @@ export const connectionController = {
     c: Context<E, P, I>,
   ) => {
     const { userId } = c.req.valid('param')
-    await connectionService.deleteConnection(userId)
+    const pageId = c.req.query('pageId')
+    await connectionService.deleteConnection(userId, pageId)
+    return c.json(successResponseSchema.parse({ success: true }))
+  },
+
+  setPersona: async <
+    E extends Env,
+    P extends string,
+    I extends Input & ParamInputSchema<TPersonaParamPayload> & JsonInputSchema<TPersonaUpdatePayload>,
+  >(
+    c: Context<E, P, I>,
+  ) => {
+    const { userId, pageId } = c.req.valid('param')
+    const { systemInstruction } = c.req.valid('json')
+    await connectionService.setPersona(userId, pageId, systemInstruction)
     return c.json(successResponseSchema.parse({ success: true }))
   },
 
@@ -54,6 +67,8 @@ export const connectionController = {
     return c.json({
       appId: envVariables.FACEBOOK_APP_ID,
       projectId: envVariables.GOOGLE_PROJECT_ID,
+      // Public Firebase Web API key — used by the browser to refresh ID tokens.
+      firebaseApiKey: envVariables.FIREBASE_WEB_API_KEY ?? '',
     })
   },
 

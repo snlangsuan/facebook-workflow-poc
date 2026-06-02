@@ -19,8 +19,9 @@ export const interactionRepository = {
     senderId: string,
     senderName: string,
     text: string,
+    opts?: { pageId?: string; status?: 'sent' | 'failed'; error?: string },
   ): Promise<IConversation> {
-    return await dbService.addMessage(convId, convName, senderId, senderName, text)
+    return await dbService.addMessage(convId, convName, senderId, senderName, text, opts)
   },
 
   async listPosts(): Promise<IPost[]> {
@@ -33,10 +34,16 @@ export const interactionRepository = {
   },
 
   async addPost(payload: TCustomerPostPayload): Promise<IPost> {
-    return await dbService.addPost(payload.content, payload.imageUrl)
+    return await dbService.addPost(payload.content, payload.imageUrl, {
+      id: payload.postId,
+      pageId: payload.pageId,
+    })
   },
 
   async addComment(payload: TCustomerCommentPayload): Promise<IComment | null> {
-    return await dbService.addComment(payload.postId, payload.senderName, payload.text)
+    return await dbService.addComment(payload.postId, payload.senderName, payload.text, {
+      id: payload.commentId,
+      parentId: payload.parentId ?? null,
+    })
   },
 }

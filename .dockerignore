@@ -1,0 +1,13 @@
+node_modules
+.git
+.agent
+dist
+.credentials
+.env.local
+.DS_Store
+*.log
+# build/design artifacts not needed in the image
+giveaway-*.png
+privacy.html
+README.md
+# keep .env — deploy/dev.Dockerfile copies it in for dev convenience

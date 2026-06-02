@@ -6,11 +6,17 @@ import type { Context, MiddlewareHandler } from 'hono'
 export function authMiddleware(): MiddlewareHandler {
   return async (c: Context, next) => {
     const authHeader = c.req.header('Authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // EventSource (SSE) cannot send custom headers, so also accept the Firebase token
+    // via the `access_token` query param for endpoints consumed by EventSource (/events).
+    // NOTE: a dedicated name is used (not `token`) so it never collides with other
+    // endpoints that already use `?token=` for a different value (e.g. /connections/pages
+    // passes the Facebook user token as `token`).
+    const queryToken = c.req.query('access_token')
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : queryToken
+
+    if (!token) {
       return c.json({ success: false, error: 'Unauthorized' }, 401)
     }
-
-    const token = authHeader.substring(7)
 
     try {
       const decoded = await firebase.auth().verifyIdToken(token)

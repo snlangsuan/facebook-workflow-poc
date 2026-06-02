@@ -1,33 +1,45 @@
 import { dbService } from '#/common/libs/db.lib'
 
+import type { IFbPageConnection } from '#/common/libs/db.lib'
 import type { TConnectionCreatePayload, TConnectionResponse } from '#/features/connections/v1/connection.type'
 
+function toResponse(conn: IFbPageConnection): TConnectionResponse {
+  return {
+    id: conn.id,
+    name: conn.name,
+    accessToken: conn.accessToken,
+    userId: conn.userId,
+    systemInstruction: conn.systemInstruction,
+    subscribed: conn.subscribed,
+  }
+}
+
 export const connectionRepository = {
-  async getByUserId(userId: string): Promise<TConnectionResponse | null> {
-    const conn = await dbService.getConnectionByUserId(userId)
-    if (!conn) {
-      return null
-    }
-    return {
-      id: conn.id,
-      name: conn.name,
-      accessToken: conn.accessToken,
-      userId: conn.userId,
-    }
+  async listByUserId(userId: string): Promise<TConnectionResponse[]> {
+    const conns = await dbService.getConnectionsByUserId(userId)
+    return conns.map(toResponse)
   },
 
   async save(payload: TConnectionCreatePayload): Promise<TConnectionResponse> {
-    const conn = {
+    const conn: IFbPageConnection = {
       id: payload.pageId,
       name: payload.pageName,
       accessToken: payload.accessToken,
       userId: payload.userId,
     }
     await dbService.saveConnection(conn)
-    return conn
+    return toResponse(conn)
   },
 
-  async delete(userId: string): Promise<void> {
-    await dbService.deleteConnection(userId)
+  async setSubscribed(userId: string, pageId: string, subscribed: boolean): Promise<void> {
+    await dbService.setSubscribed(userId, pageId, subscribed)
+  },
+
+  async setSystemInstruction(userId: string, pageId: string, instruction: string): Promise<void> {
+    await dbService.setSystemInstruction(userId, pageId, instruction)
+  },
+
+  async delete(userId: string, pageId?: string): Promise<void> {
+    await dbService.deleteConnection(userId, pageId)
   },
 }
