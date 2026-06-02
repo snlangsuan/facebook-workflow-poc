@@ -322,14 +322,21 @@ export const interactionService = {
 
     const url =
       `${GRAPH}/${postId}?fields=from,message,full_picture,created_time,` +
-      `comments.limit(100){id,from,message,created_time,parent}&access_token=${conn.accessToken}`
+      `comments.limit(100){id,from{name,id,picture{url}},message,created_time,parent}&access_token=${conn.accessToken}`
     const res = await fetch(url)
     const data = (await res.json()) as {
       error?: { message?: string }
       from?: { id?: string; name?: string }
       message?: string
       full_picture?: string
-      comments?: { data?: Array<{ id: string; from?: { name?: string }; message?: string; parent?: { id?: string } }> }
+      comments?: {
+        data?: Array<{
+          id: string
+          from?: { name?: string; picture?: { data?: { url?: string } } }
+          message?: string
+          parent?: { id?: string }
+        }>
+      }
     }
     if (!res.ok || data.error) {
       logger.error(data.error ?? data, 'Failed to import post from Graph API')
@@ -361,6 +368,7 @@ export const interactionService = {
       await dbService.addComment(postId, cm.from?.name || 'User', cm.message, {
         id: cm.id,
         parentId: cm.parent?.id ?? null,
+        avatarUrl: cm.from?.picture?.data?.url,
       })
     }
 

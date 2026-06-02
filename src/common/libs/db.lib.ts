@@ -40,6 +40,7 @@ export interface IComment {
   senderName: string
   text: string
   timestamp: string
+  avatarUrl?: string
   parentId?: string | null
   status?: 'sent' | 'failed'
   error?: string
@@ -242,7 +243,7 @@ export const dbService = {
     postId: string,
     senderName: string,
     text: string,
-    opts?: { id?: string; parentId?: string | null; status?: 'sent' | 'failed'; error?: string },
+    opts?: { id?: string; parentId?: string | null; status?: 'sent' | 'failed'; error?: string; avatarUrl?: string },
   ): Promise<IComment | null> => {
     const ref = rtdb.ref(`posts/${postId}`)
     const snapshot = await ref.once('value')
@@ -257,6 +258,7 @@ export const dbService = {
       text,
       timestamp: formatToIso(),
       parentId: opts?.parentId ?? null,
+      ...(opts?.avatarUrl ? { avatarUrl: opts.avatarUrl } : {}),
       ...(opts?.status ? { status: opts.status } : {}),
       ...(opts?.error ? { error: opts.error } : {}),
     }
