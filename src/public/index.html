@@ -57,6 +57,15 @@
     .animate-pulse-dot {
       animation: pulse-dot 2s infinite ease-in-out;
     }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.35);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      display: inline-block;
+    }
   </style>
 </head>
 <body class="bg-[#0b0d11] text-slate-100 flex items-center justify-center h-screen w-screen font-sans overflow-hidden antialiased select-none">
@@ -974,7 +983,7 @@
         <div class="flex-1 overflow-y-auto p-6 flex flex-col gap-4" id="chatMessagesBox">${messagesHtml}</div>
         <div class="px-6 py-5 border-t border-slate-800/85 flex gap-3 items-center bg-slate-950/10">
           <input type="text" id="chatComposerInput" class="flex-1 h-11 bg-black/25 border border-slate-800/80 rounded-xl px-4 text-sm focus:outline-none focus:border-indigo-500/50 transition-all" placeholder="Write reply to ${conv.name}..." onkeydown="handleComposeKey(event)">
-          <button class="w-11 h-11 bg-indigo-600 hover:bg-indigo-500 active:scale-95 rounded-xl flex items-center justify-center transition-all" onclick="sendReplyMessage()">
+          <button id="chatSendBtn" class="w-11 h-11 bg-indigo-600 hover:bg-indigo-500 active:scale-95 rounded-xl flex items-center justify-center transition-all" onclick="sendReplyMessage()">
             <svg class="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="22" y1="2" x2="11" y2="13"></line>
               <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
@@ -998,21 +1007,23 @@
       const input = document.getElementById('chatComposerInput');
       const text = input.value.trim();
       if (!text || !selectedActiveId) return;
-      
-      input.value = '';
-      
-      try {
-        const res = await apiFetch('/api/v1/interactions/messages/reply', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ conversationId: selectedActiveId, text })
-        });
-        if (res.ok) {
+      const btn = document.getElementById('chatSendBtn');
+      await runWithLoading(btn, async () => {
+        try {
+          const res = await apiFetch('/api/v1/interactions/messages/reply', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ conversationId: selectedActiveId, text })
+          });
+          if (!res.ok) throw new Error('Could not send the message.');
+          input.value = '';
           const conv = await res.json();
           renderOpenConversation(conv);
           fetchConversationsList(false);
+        } catch (err) {
+          showAlertDialog('Send Failed', err.message);
         }
-      } catch (err) {}
+      });
     }
 
     async function fetchPostsList(shouldResetWorkspace = true) {
@@ -1129,6 +1140,12 @@
                   <span class="text-[10px] text-slate-500 flex-shrink-0">${time}</span>
                 </div>
                 <p class="text-xs text-slate-400 leading-relaxed mt-1">${c.text}</p>
+                ${!nested ? `
+                <button onclick="toggleReplyBox('${c.id}')" class="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold mt-1.5">Reply</button>
+                <div id="reply-box-${c.id}" class="hidden mt-2 flex gap-2">
+                  <input id="reply-input-${c.id}" class="flex-1 h-8 bg-black/25 border border-slate-800/80 rounded-lg px-3 text-xs text-slate-200 focus:outline-none focus:border-indigo-500/50 transition-colors" placeholder="Write a reply…" onkeydown="if(event.key==='Enter')submitCommentReply('${c.id}')">
+                  <button onclick="submitCommentReply('${c.id}')" class="h-8 px-3 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-xs font-medium text-white transition-colors flex-shrink-0">Send</button>
+                </div>` : ''}
               </div>
             </div>
           </div>
@@ -1186,8 +1203,8 @@
         </div>
         
         <div class="px-6 py-5 border-t border-slate-800/85 flex gap-3 items-center bg-slate-950/10">
-          <input type="text" id="commentComposerInput" class="flex-1 h-11 bg-black/25 border border-slate-800/80 rounded-xl px-4 text-sm focus:outline-none focus:border-indigo-500/50 transition-all" placeholder="Write page reply to comments..." onkeydown="handleCommentComposeKey(event)">
-          <button class="w-11 h-11 bg-indigo-600 hover:bg-indigo-500 active:scale-95 rounded-xl flex items-center justify-center transition-all" onclick="sendReplyComment()">
+          <input type="text" id="commentComposerInput" class="flex-1 h-11 bg-black/25 border border-slate-800/80 rounded-xl px-4 text-sm focus:outline-none focus:border-indigo-500/50 transition-all" placeholder="Write a comment on this post…" onkeydown="handleCommentComposeKey(event)">
+          <button id="commentSendBtn" class="w-11 h-11 bg-indigo-600 hover:bg-indigo-500 active:scale-95 rounded-xl flex items-center justify-center transition-all" onclick="sendReplyComment()">
             <svg class="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="22" y1="2" x2="11" y2="13"></line>
               <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
@@ -1205,25 +1222,72 @@
       }
     }
 
+    // Show a spinner on a button while an async task runs; restores it afterwards.
+    async function runWithLoading(btn, task) {
+      if (!btn) return task();
+      const prevHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.dataset.loading = '1';
+      btn.innerHTML = '<span class="spinner"></span>';
+      try {
+        return await task();
+      } finally {
+        btn.disabled = false;
+        delete btn.dataset.loading;
+        btn.innerHTML = prevHtml;
+      }
+    }
+
     async function sendReplyComment() {
       const input = document.getElementById('commentComposerInput');
       const text = input.value.trim();
       if (!text || !selectedActiveId) return;
-      
-      input.value = '';
-      
-      try {
-        const res = await apiFetch('/api/v1/interactions/comments/reply', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ postId: selectedActiveId, text })
-        });
-        if (res.ok) {
-          const post = await res.json();
-          selectPost(selectedActiveId);
-          fetchPostsList(false);
+      const btn = document.getElementById('commentSendBtn');
+      await runWithLoading(btn, async () => {
+        try {
+          const res = await apiFetch('/api/v1/interactions/comments/reply', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ postId: selectedActiveId, text })
+          });
+          if (!res.ok) throw new Error('Could not post the comment.');
+          input.value = '';
+          await selectPost(selectedActiveId);
+        } catch (err) {
+          showAlertDialog('Comment Failed', err.message);
         }
-      } catch (err) {}
+      });
+    }
+
+    function toggleReplyBox(commentId) {
+      const box = document.getElementById(`reply-box-${commentId}`);
+      if (!box) return;
+      box.classList.toggle('hidden');
+      if (!box.classList.contains('hidden')) {
+        const inp = document.getElementById(`reply-input-${commentId}`);
+        if (inp) inp.focus();
+      }
+    }
+
+    async function submitCommentReply(commentId) {
+      const input = document.getElementById(`reply-input-${commentId}`);
+      if (!input) return;
+      const text = input.value.trim();
+      if (!text || !selectedActiveId) return;
+      const btn = document.querySelector(`#reply-box-${commentId} button`);
+      await runWithLoading(btn, async () => {
+        try {
+          const res = await apiFetch('/api/v1/interactions/comments/reply', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ postId: selectedActiveId, commentId, text })
+          });
+          if (!res.ok) throw new Error('Could not post the reply.');
+          await selectPost(selectedActiveId);
+        } catch (err) {
+          showAlertDialog('Reply Failed', err.message);
+        }
+      });
     }
 
 

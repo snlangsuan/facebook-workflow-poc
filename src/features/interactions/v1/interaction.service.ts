@@ -63,9 +63,7 @@ function extractPostId(input: string, pageId: string): string {
     } else {
       // /{page}/posts/{postId}, /{page}/videos/{id}, or trailing /{numericId}
       const m =
-        u.pathname.match(/\/posts\/(\w+)/) ||
-        u.pathname.match(/\/videos\/(\w+)/) ||
-        u.pathname.match(/\/(\d+)\/?$/)
+        u.pathname.match(/\/posts\/(\w+)/) || u.pathname.match(/\/videos\/(\w+)/) || u.pathname.match(/\/(\d+)\/?$/)
       if (m?.[1]) {
         candidate = m[1]
       }
@@ -94,8 +92,7 @@ async function resolvePostIdFromHtml(url: string, conn: IFbPageConnection): Prom
     })
     const html = await res.text()
     const ogUrl =
-      html.match(/property="og:url"\s+content="([^"]+)"/i)?.[1] ??
-      html.match(/og:url[^>]*content="([^"]+)"/i)?.[1]
+      html.match(/property="og:url"\s+content="([^"]+)"/i)?.[1] ?? html.match(/og:url[^>]*content="([^"]+)"/i)?.[1]
     if (!ogUrl) {
       return null
     }
@@ -484,15 +481,20 @@ export const interactionService = {
   async replyToComment(payload: TCommentReplyPayload): Promise<IComment | null> {
     const post = await interactionRepository.getPost(payload.postId)
     const conn = await resolveConnection(post?.pageId)
+    // Reply to a specific comment when commentId is given, else comment on the post.
+    const target = payload.commentId || payload.postId
     if (conn?.accessToken) {
       try {
-        await sendCommentReply(conn.accessToken, payload.postId, payload.text)
+        await sendCommentReply(conn.accessToken, target, payload.text)
       } catch (error) {
         logger.error(error, 'Manual comment reply failed')
       }
     }
 
-    const comment = await dbService.addComment(payload.postId, 'Page Admin', payload.text, { status: 'sent' })
+    const comment = await dbService.addComment(payload.postId, 'Page Admin', payload.text, {
+      status: 'sent',
+      parentId: payload.commentId ?? null,
+    })
     if (!comment) {
       return null
     }

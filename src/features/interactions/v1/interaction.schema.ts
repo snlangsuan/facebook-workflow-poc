@@ -14,6 +14,8 @@ export const messageReplyPayloadSchema = z.object({
 export const commentReplyPayloadSchema = z.object({
   postId: z.string().min(1),
   text: z.string().min(1),
+  // When set, reply to this specific comment; otherwise post a top-level comment.
+  commentId: z.string().optional(),
 })
 
 export const customerMessagePayloadSchema = z.object({
