@@ -14,7 +14,7 @@ export const envSchema = z.object({
   FACEBOOK_APP_ID: z.string().default('4503288803286309'),
   FACEBOOK_APP_SECRET: z.string().default('<secret>'),
   FACEBOOK_VERIFY_TOKEN: z.string().default('facebook_verify_token_123'),
-  FACEBOOK_GRAPH_VERSION: z.string().default('v21.0'),
+  FACEBOOK_GRAPH_VERSION: z.string().default('v25.0'),
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().default('gemini-2.5-flash'),
   GEMINI_DEFAULT_PERSONA: z

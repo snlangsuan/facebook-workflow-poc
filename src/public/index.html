@@ -265,6 +265,7 @@
     let eventSource = null;
     let fbAppId = '';
     let fbApiKey = '';
+    let fbGraphVersion = 'v25.0';
     let refreshingPromise = null;
 
     document.getElementById('loginBtn').addEventListener('click', handleLogin);
@@ -390,6 +391,7 @@
         const data = await res.json();
         fbAppId = data.appId;
         fbApiKey = data.firebaseApiKey || '';
+        fbGraphVersion = data.graphVersion || fbGraphVersion;
         // ไม่โหลด FB SDK ที่นี่ — โหลดเฉพาะตอนต้องเชื่อมเพจใหม่ (ensureFacebookSDK)
         // ถ้าเชื่อมเพจไว้แล้วและ token ยังใช้ได้ ก็ไม่ต้องยุ่งกับ Facebook login เลย
       } catch (err) {}
@@ -401,7 +403,7 @@
           appId: appId,
           cookie: true,
           xfbml: false,
-          version: 'v25.0'
+          version: fbGraphVersion
         });
       };
       (function(d, s, id) {

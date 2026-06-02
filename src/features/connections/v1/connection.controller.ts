@@ -69,6 +69,8 @@ export const connectionController = {
       projectId: envVariables.GOOGLE_PROJECT_ID,
       // Public Firebase Web API key — used by the browser to refresh ID tokens.
       firebaseApiKey: envVariables.FIREBASE_WEB_API_KEY ?? '',
+      // Graph API version — single source of truth so the JS SDK matches the backend.
+      graphVersion: envVariables.FACEBOOK_GRAPH_VERSION,
     })
   },
 
