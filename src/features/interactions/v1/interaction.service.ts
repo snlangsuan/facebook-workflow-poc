@@ -45,10 +45,12 @@ export const sseBroker = {
  */
 function extractPostId(input: string, pageId: string): string {
   const value = input.trim()
-  // Already a Graph post id, e.g. 12345_67890
+  // Already a full Graph post id, e.g. 12345_67890
   if (/^\d+_\w+$/.test(value)) {
     return value
   }
+
+  let candidate = value
   try {
     const u = new URL(value)
     const storyFbid = u.searchParams.get('story_fbid')
@@ -57,18 +59,106 @@ function extractPostId(input: string, pageId: string): string {
       return `${idParam}_${storyFbid}`
     }
     if (storyFbid) {
-      return `${pageId}_${storyFbid}`
-    }
-    // /{page}/posts/{postId}  or trailing /{numericId}
-    const m = u.pathname.match(/\/posts\/(\w+)/) || u.pathname.match(/\/(\d+)\/?$/)
-    const pid = m?.[1]
-    if (pid) {
-      return /^\d+$/.test(pid) ? `${pageId}_${pid}` : pid
+      candidate = storyFbid
+    } else {
+      // /{page}/posts/{postId}, /{page}/videos/{id}, or trailing /{numericId}
+      const m =
+        u.pathname.match(/\/posts\/(\w+)/) ||
+        u.pathname.match(/\/videos\/(\w+)/) ||
+        u.pathname.match(/\/(\d+)\/?$/)
+      if (m?.[1]) {
+        candidate = m[1]
+      }
     }
   } catch {
-    // not a URL — fall through
+    // not a URL — treat the raw value as the candidate
   }
-  return value
+
+  // A bare numeric id is a status/post id without its page prefix. Reading it directly
+  // triggers "(#12) singular statuses API is deprecated", so always qualify it.
+  if (/^\d+$/.test(candidate)) {
+    return `${pageId}_${candidate}`
+  }
+  return candidate
+}
+
+/**
+ * Modern Facebook URLs use opaque `pfbid` tokens that can't be turned into a Graph
+ * post id directly. Fetch the page's HTML (as a link crawler) and read the numeric
+ * post id from the `og:url` meta tag, then qualify it with the page id.
+ */
+async function resolvePostIdFromHtml(url: string, conn: IFbPageConnection): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)' },
+    })
+    const html = await res.text()
+    const ogUrl =
+      html.match(/property="og:url"\s+content="([^"]+)"/i)?.[1] ??
+      html.match(/og:url[^>]*content="([^"]+)"/i)?.[1]
+    if (!ogUrl) {
+      return null
+    }
+    const base = ogUrl.split('?')[0] ?? ogUrl
+    const numeric = base.replace(/\/+$/, '').match(/(\d{6,})$/)?.[1]
+    return numeric ? `${conn.id}_${numeric}` : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Facebook share links (/share/p/<code>) redirect to the canonical post URL.
+ * Follow the redirect and return the final URL (handling a login wall by reading
+ * the `next` param), so it can then be parsed like any other post URL.
+ */
+async function followShareUrl(url: string): Promise<string> {
+  try {
+    const res = await fetch(url, { redirect: 'follow', headers: { 'User-Agent': 'Mozilla/5.0' } })
+    let final = res.url || url
+    try {
+      const next = new URL(final).searchParams.get('next')
+      if (next) {
+        final = decodeURIComponent(next)
+      }
+    } catch {
+      // final is not a parseable URL — keep as-is
+    }
+    return final
+  } catch {
+    return url
+  }
+}
+
+/**
+ * Resolve any Facebook post reference (full id, bare id, /posts/ URL, pfbid link,
+ * or /share/p/ link) to a Graph post id that belongs to the connected page.
+ */
+async function resolveImportPostId(input: string, conn: IFbPageConnection): Promise<string> {
+  let ref = input.trim()
+  if (/facebook\.com\/share\//i.test(ref)) {
+    ref = await followShareUrl(ref)
+  }
+
+  // pfbid links (incl. share links resolved above) can't be used directly —
+  // scrape the numeric post id from the page's og:url meta tag.
+  let postId: string
+  if (/pfbid/i.test(ref)) {
+    const resolved = await resolvePostIdFromHtml(ref, conn)
+    if (!resolved) {
+      throw new Error('Could not resolve this post link. Try the numeric post URL or the {pageId}_{postId} id.')
+    }
+    postId = resolved
+  } else {
+    postId = extractPostId(ref, conn.id)
+  }
+
+  // Ownership guard: a page post id is "{owningPageId}_{postId}".
+  const ownerPrefix = postId.includes('_') ? postId.split('_')[0] : ''
+  if (ownerPrefix && /^\d+$/.test(ownerPrefix) && ownerPrefix !== conn.id) {
+    throw new Error('This post does not belong to the selected page.')
+  }
+  return postId
 }
 
 async function resolveConnection(pageId?: string): Promise<IFbPageConnection | undefined> {
@@ -228,14 +318,7 @@ export const interactionService = {
       throw new Error('No connected page with a valid access token')
     }
 
-    const postId = extractPostId(input, conn.id)
-
-    // Early guard: a page post id is "{owningPageId}_{postId}". If the prefix is a
-    // different page id, reject before fetching anything.
-    const ownerPrefix = postId.includes('_') ? postId.split('_')[0] : ''
-    if (ownerPrefix && /^\d+$/.test(ownerPrefix) && ownerPrefix !== conn.id) {
-      throw new Error('This post does not belong to the selected page.')
-    }
+    const postId = await resolveImportPostId(input, conn)
 
     const url =
       `${GRAPH}/${postId}?fields=from,message,full_picture,created_time,` +
