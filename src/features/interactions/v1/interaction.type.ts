@@ -7,6 +7,7 @@ import {
   customerMessagePayloadSchema,
   customerCommentPayloadSchema,
   customerPostPayloadSchema,
+  importPostPayloadSchema,
   conversationParamPayloadSchema,
   postParamPayloadSchema,
 } from '#/features/interactions/v1/interaction.schema'
@@ -17,5 +18,6 @@ export type TCommentReplyPayload = z.infer<typeof commentReplyPayloadSchema>
 export type TCustomerMessagePayload = z.infer<typeof customerMessagePayloadSchema>
 export type TCustomerCommentPayload = z.infer<typeof customerCommentPayloadSchema>
 export type TCustomerPostPayload = z.infer<typeof customerPostPayloadSchema>
+export type TImportPostPayload = z.infer<typeof importPostPayloadSchema>
 export type TConversationParamPayload = z.infer<typeof conversationParamPayloadSchema>
 export type TPostParamPayload = z.infer<typeof postParamPayloadSchema>

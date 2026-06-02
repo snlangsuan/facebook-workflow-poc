@@ -10,6 +10,15 @@ export const verifyWebhookSpec = describeRoute({
   },
 })
 
+export const importPostSpec = describeRoute({
+  tags: ['Interactions'],
+  summary: 'Import a Facebook post (and its comments) by URL or id',
+  responses: {
+    200: { description: 'Post imported' },
+    400: { description: 'Invalid URL or fetch failed' },
+  },
+})
+
 export const receiveWebhookSpec = describeRoute({
   tags: ['Webhook'],
   summary: 'Receive Facebook webhook notifications',

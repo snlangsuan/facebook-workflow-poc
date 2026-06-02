@@ -16,6 +16,7 @@ import type {
   TMessageReplyPayload,
   TPostParamPayload,
   TCommentReplyPayload,
+  TImportPostPayload,
 } from '#/features/interactions/v1/interaction.type'
 import type { Context, Env, Input } from 'hono'
 
@@ -162,6 +163,19 @@ export const interactionController = {
   listPosts: async <E extends Env, P extends string, I extends Input>(c: Context<E, P, I>) => {
     const posts = await interactionService.listPosts()
     return c.json(posts)
+  },
+
+  importPost: async <E extends Env, P extends string, I extends Input & JsonInputSchema<TImportPostPayload>>(
+    c: Context<E, P, I>,
+  ) => {
+    const { input, pageId } = c.req.valid('json')
+    try {
+      const post = await interactionService.importPost(input, pageId)
+      return c.json(post)
+    } catch (error) {
+      const err = error as Error
+      return c.json({ success: false, error: err.message || 'Import failed' }, 400)
+    }
   },
 
   getPost: async <E extends Env, P extends string, I extends Input & ParamInputSchema<TPostParamPayload>>(

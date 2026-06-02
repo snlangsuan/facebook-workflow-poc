@@ -152,6 +152,20 @@
     </div>
   </dialog>
 
+  <dialog id="addPostDialog" class="bg-transparent backdrop:bg-slate-950/80 backdrop:backdrop-blur-md outline-none border-none p-0 m-auto">
+    <div class="w-[480px] bg-[#14171d] border border-white/10 rounded-2xl p-8 flex flex-col gap-5 shadow-2xl text-slate-100">
+      <div>
+        <h3 class="text-lg font-semibold text-white">Add a post by URL</h3>
+        <p class="text-slate-400 text-sm mt-1">Paste a Facebook post URL (or its id). We'll import the post and its comments via the Graph API.</p>
+      </div>
+      <input id="addPostInput" class="w-full h-11 bg-[#0e1116] border border-white/10 rounded-lg px-3.5 text-sm text-slate-100 focus:outline-none focus:border-indigo-500/70 transition-colors" placeholder="https://www.facebook.com/.../posts/123…" onkeydown="if(event.key==='Enter')importPost()">
+      <div class="flex justify-end gap-3">
+        <button class="h-10 px-6 bg-slate-800 hover:bg-slate-700 active:scale-[0.98] text-white font-semibold rounded-lg transition-all border border-slate-700/50" onclick="document.getElementById('addPostDialog').close()">Cancel</button>
+        <button id="addPostSubmitBtn" class="h-10 px-6 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white font-bold rounded-lg transition-all" onclick="importPost()">Import</button>
+      </div>
+    </div>
+  </dialog>
+
   <dialog id="personaDialog" class="bg-transparent backdrop:bg-slate-950/80 backdrop:backdrop-blur-md outline-none border-none p-0 m-auto">
     <div class="w-[480px] bg-slate-900/60 border border-slate-800/80 rounded-3xl p-8 flex flex-col gap-5 shadow-2xl backdrop-blur-2xl text-slate-100 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.1),transparent_50%)]">
       <div>
@@ -212,7 +226,10 @@
 
     <div class="w-[340px] border-r border-white/[0.07] bg-[#0a0c10] flex flex-col">
       <div class="p-4 border-b border-white/[0.07] flex flex-col gap-3">
-        <h2 class="text-base font-semibold text-slate-100" id="listTitle">Conversations</h2>
+        <div class="flex items-center justify-between gap-2">
+          <h2 class="text-base font-semibold text-slate-100" id="listTitle">Conversations</h2>
+          <button id="addPostBtn" onclick="openAddPostDialog()" class="hidden h-8 px-3 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] rounded-md text-xs font-medium text-white transition-colors">+ Add post</button>
+        </div>
         <div class="relative">
           <svg class="absolute left-3 top-2.5 w-4 h-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="11" cy="11" r="8"></circle>
@@ -595,6 +612,7 @@
 
     function showNoPageState() {
       document.getElementById('listTitle').innerText = 'Conversations';
+      document.getElementById('addPostBtn').classList.add('hidden');
       document.getElementById('listContent').innerHTML = '';
       const openDetail = document.getElementById('openDetailContainer');
       if (openDetail) openDetail.remove();
@@ -668,6 +686,41 @@
       if (!connectedPage || !Array.isArray(items)) return items;
       // Show items belonging to the active page; untagged items (no pageId) stay visible.
       return items.filter((it) => !it.pageId || it.pageId === connectedPage.id);
+    }
+
+    function openAddPostDialog() {
+      if (!connectedPage) return;
+      document.getElementById('addPostInput').value = '';
+      document.getElementById('addPostDialog').showModal();
+      setTimeout(() => document.getElementById('addPostInput').focus(), 50);
+    }
+
+    async function importPost() {
+      const input = document.getElementById('addPostInput').value.trim();
+      if (!input || !connectedPage) return;
+      const btn = document.getElementById('addPostSubmitBtn');
+      btn.disabled = true; btn.innerText = 'Importing…';
+      try {
+        const res = await apiFetch('/api/v1/interactions/posts/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ input, pageId: connectedPage.id })
+        });
+        if (!res.ok) {
+          const e = await res.json().catch(() => ({}));
+          throw new Error(e.error || 'Could not import this post.');
+        }
+        const post = await res.json();
+        document.getElementById('addPostDialog').close();
+        if (activeTab === 'post') {
+          await fetchPostsList(false);
+          selectPost(post.id);
+        }
+      } catch (e) {
+        showAlertDialog('Import Failed', e.message);
+      } finally {
+        btn.disabled = false; btn.innerText = 'Import';
+      }
     }
 
     function openPersonaDialog() {
@@ -791,6 +844,8 @@
       if (openDetail) openDetail.remove();
 
       const pageLabel = connectedPage ? connectedPage.name : '';
+      // "+ Add post" only makes sense in the Feed view of a connected page.
+      document.getElementById('addPostBtn').classList.toggle('hidden', !(tab === 'post' && connectedPage));
       if (tab === 'inbox') {
         document.getElementById('listTitle').innerText = pageLabel ? `${pageLabel} · Inbox` : 'Conversations';
         fetchConversationsList();

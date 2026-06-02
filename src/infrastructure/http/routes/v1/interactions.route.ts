@@ -13,6 +13,7 @@ import {
   listPostsSpec,
   getPostSpec,
   replyToCommentSpec,
+  importPostSpec,
 } from '#/features/interactions/v1/interaction.openapi'
 import {
   webhookVerifyQuerySchema,
@@ -20,6 +21,7 @@ import {
   messageReplyPayloadSchema,
   postParamPayloadSchema,
   commentReplyPayloadSchema,
+  importPostPayloadSchema,
 } from '#/features/interactions/v1/interaction.schema'
 
 export const interactionsRouter = new Hono()
@@ -59,6 +61,14 @@ interactionsRouter.post(
 )
 
 interactionsRouter.get('/posts', listPostsSpec, authMiddleware(), interactionController.listPosts)
+
+interactionsRouter.post(
+  '/posts/import',
+  importPostSpec,
+  authMiddleware(),
+  zValidator('json', importPostPayloadSchema),
+  interactionController.importPost,
+)
 
 interactionsRouter.get(
   '/posts/:id',

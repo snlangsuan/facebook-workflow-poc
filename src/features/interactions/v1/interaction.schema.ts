@@ -39,6 +39,11 @@ export const customerPostPayloadSchema = z.object({
   pageId: z.string().optional(),
 })
 
+export const importPostPayloadSchema = z.object({
+  input: z.string().min(1), // Facebook post URL or post id
+  pageId: z.string().optional(),
+})
+
 export const conversationParamPayloadSchema = z.object({
   id: z.string().min(1),
 })

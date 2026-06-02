@@ -39,6 +39,38 @@ export const sseBroker = {
   },
 }
 
+/**
+ * Best-effort extraction of a Graph post id ({page-id}_{post-id}) from a Facebook
+ * post URL or a raw id. Handles the common URL shapes; falls back to the raw input.
+ */
+function extractPostId(input: string, pageId: string): string {
+  const value = input.trim()
+  // Already a Graph post id, e.g. 12345_67890
+  if (/^\d+_\w+$/.test(value)) {
+    return value
+  }
+  try {
+    const u = new URL(value)
+    const storyFbid = u.searchParams.get('story_fbid')
+    const idParam = u.searchParams.get('id')
+    if (storyFbid && idParam) {
+      return `${idParam}_${storyFbid}`
+    }
+    if (storyFbid) {
+      return `${pageId}_${storyFbid}`
+    }
+    // /{page}/posts/{postId}  or trailing /{numericId}
+    const m = u.pathname.match(/\/posts\/(\w+)/) || u.pathname.match(/\/(\d+)\/?$/)
+    const pid = m?.[1]
+    if (pid) {
+      return /^\d+$/.test(pid) ? `${pageId}_${pid}` : pid
+    }
+  } catch {
+    // not a URL — fall through
+  }
+  return value
+}
+
 async function resolveConnection(pageId?: string): Promise<IFbPageConnection | undefined> {
   if (pageId) {
     const byPage = await dbService.getConnectionByPageId(pageId)
@@ -183,6 +215,76 @@ export const interactionService = {
 
   async getPost(id: string): Promise<IPost | null> {
     return interactionRepository.getPost(id)
+  },
+
+  /**
+   * Import a post by Facebook URL (or post id) using the Graph API: fetches the post
+   * content and its comments, then stores them locally (deduped). Lets admins pull a
+   * specific post into the system without waiting for webhooks.
+   */
+  async importPost(input: string, pageId?: string): Promise<IPost> {
+    const conn = await resolveConnection(pageId)
+    if (!conn?.accessToken) {
+      throw new Error('No connected page with a valid access token')
+    }
+
+    const postId = extractPostId(input, conn.id)
+
+    // Early guard: a page post id is "{owningPageId}_{postId}". If the prefix is a
+    // different page id, reject before fetching anything.
+    const ownerPrefix = postId.includes('_') ? postId.split('_')[0] : ''
+    if (ownerPrefix && /^\d+$/.test(ownerPrefix) && ownerPrefix !== conn.id) {
+      throw new Error('This post does not belong to the selected page.')
+    }
+
+    const url =
+      `${GRAPH}/${postId}?fields=from,message,full_picture,created_time,` +
+      `comments.limit(100){id,from,message,created_time,parent}&access_token=${conn.accessToken}`
+    const res = await fetch(url)
+    const data = (await res.json()) as {
+      error?: { message?: string }
+      from?: { id?: string; name?: string }
+      message?: string
+      full_picture?: string
+      comments?: { data?: Array<{ id: string; from?: { name?: string }; message?: string; parent?: { id?: string } }> }
+    }
+    if (!res.ok || data.error) {
+      logger.error(data.error ?? data, 'Failed to import post from Graph API')
+      throw new Error(data.error?.message || 'Could not fetch this post. Check the URL/permissions.')
+    }
+
+    // Authoritative check: the post's author (`from`) must be the connected page.
+    if (data.from?.id && data.from.id !== conn.id) {
+      throw new Error('This post does not belong to the selected page.')
+    }
+
+    // Upsert the post.
+    let post = await interactionRepository.getPost(postId)
+    if (!post) {
+      post = await interactionRepository.addPost({
+        content: data.message || '(no text)',
+        imageUrl: data.full_picture || null,
+        postId,
+        pageId: conn.id,
+      })
+    }
+
+    // Add only comments we don't already have.
+    const existingIds = new Set((post.comments || []).map((c) => c.id))
+    for (const cm of data.comments?.data ?? []) {
+      if (!cm.message || existingIds.has(cm.id)) {
+        continue
+      }
+      await dbService.addComment(postId, cm.from?.name || 'User', cm.message, {
+        id: cm.id,
+        parentId: cm.parent?.id ?? null,
+      })
+    }
+
+    const updated = (await interactionRepository.getPost(postId)) as IPost
+    sseBroker.broadcast('posts_updated', updated)
+    sseBroker.broadcast('post_updated', updated)
+    return updated
   },
 
   async receiveCustomerPost(payload: TCustomerPostPayload): Promise<IPost> {
