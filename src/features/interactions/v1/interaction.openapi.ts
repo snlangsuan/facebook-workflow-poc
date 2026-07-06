@@ -19,6 +19,24 @@ export const hideCommentSpec = describeRoute({
   },
 })
 
+export const likeCommentSpec = describeRoute({
+  tags: ['Interactions'],
+  summary: 'Like or unlike a comment as the Page (pages_manage_engagement)',
+  responses: {
+    200: { description: 'Comment like updated' },
+    404: { description: 'Comment not found' },
+  },
+})
+
+export const deleteCommentSpec = describeRoute({
+  tags: ['Interactions'],
+  summary: 'Delete a comment on a Page post (pages_manage_engagement)',
+  responses: {
+    200: { description: 'Comment deleted' },
+    404: { description: 'Comment not found' },
+  },
+})
+
 export const syncPostSpec = describeRoute({
   tags: ['Interactions'],
   summary: "Re-sync a post's comments and replies from Facebook",

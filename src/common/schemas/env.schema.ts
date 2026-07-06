@@ -15,6 +15,13 @@ export const envSchema = z.object({
   FACEBOOK_APP_SECRET: z.string().default('<secret>'),
   FACEBOOK_VERIFY_TOKEN: z.string().default('facebook_verify_token_123'),
   FACEBOOK_GRAPH_VERSION: z.string().default('v25.0'),
+  // TikTok Login Kit (OAuth 2.0). Configure these in the TikTok for Developers console.
+  TIKTOK_CLIENT_KEY: z.string().default('<tiktok_client_key>'),
+  TIKTOK_CLIENT_SECRET: z.string().default('<tiktok_client_secret>'),
+  // Space/comma separated scopes requested at authorize time.
+  TIKTOK_SCOPE: z.string().default('user.info.basic'),
+  // Optional explicit redirect URI. Falls back to `${BASE_URL}/demo/api/v1/tiktok/callback`.
+  TIKTOK_REDIRECT_URI: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().default('gemini-2.5-flash'),
   GEMINI_DEFAULT_PERSONA: z

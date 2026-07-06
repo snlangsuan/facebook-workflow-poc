@@ -5,6 +5,8 @@ import {
   messageReplyPayloadSchema,
   commentReplyPayloadSchema,
   hideCommentPayloadSchema,
+  likeCommentPayloadSchema,
+  deleteCommentPayloadSchema,
   customerMessagePayloadSchema,
   customerCommentPayloadSchema,
   customerPostPayloadSchema,
@@ -17,6 +19,8 @@ export type TWebhookVerifyQuery = z.infer<typeof webhookVerifyQuerySchema>
 export type TMessageReplyPayload = z.infer<typeof messageReplyPayloadSchema>
 export type TCommentReplyPayload = z.infer<typeof commentReplyPayloadSchema>
 export type THideCommentPayload = z.infer<typeof hideCommentPayloadSchema>
+export type TLikeCommentPayload = z.infer<typeof likeCommentPayloadSchema>
+export type TDeleteCommentPayload = z.infer<typeof deleteCommentPayloadSchema>
 export type TCustomerMessagePayload = z.infer<typeof customerMessagePayloadSchema>
 export type TCustomerCommentPayload = z.infer<typeof customerCommentPayloadSchema>
 export type TCustomerPostPayload = z.infer<typeof customerPostPayloadSchema>

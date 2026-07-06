@@ -18,6 +18,8 @@ import type {
   TCommentReplyPayload,
   TImportPostPayload,
   THideCommentPayload,
+  TLikeCommentPayload,
+  TDeleteCommentPayload,
 } from '#/features/interactions/v1/interaction.type'
 import type { Context, Env, Input } from 'hono'
 
@@ -284,6 +286,38 @@ export const interactionController = {
     } catch (error) {
       const err = error as Error
       return c.json({ success: false, error: err.message || 'Failed to update comment visibility' }, 400)
+    }
+  },
+
+  likeComment: async <E extends Env, P extends string, I extends Input & JsonInputSchema<TLikeCommentPayload>>(
+    c: Context<E, P, I>,
+  ) => {
+    const payload = c.req.valid('json')
+    try {
+      const post = await interactionService.likeComment(payload)
+      if (!post) {
+        return c.json({ success: false, error: 'Comment not found' }, 404)
+      }
+      return c.json(post)
+    } catch (error) {
+      const err = error as Error
+      return c.json({ success: false, error: err.message || 'Failed to update comment like' }, 400)
+    }
+  },
+
+  deleteComment: async <E extends Env, P extends string, I extends Input & JsonInputSchema<TDeleteCommentPayload>>(
+    c: Context<E, P, I>,
+  ) => {
+    const payload = c.req.valid('json')
+    try {
+      const post = await interactionService.deleteComment(payload)
+      if (!post) {
+        return c.json({ success: false, error: 'Comment not found' }, 404)
+      }
+      return c.json(post)
+    } catch (error) {
+      const err = error as Error
+      return c.json({ success: false, error: err.message || 'Failed to delete comment' }, 400)
     }
   },
 

@@ -12,6 +12,8 @@ import type {
   TCustomerCommentPayload,
   TMessageReplyPayload,
   TCommentReplyPayload,
+  TLikeCommentPayload,
+  TDeleteCommentPayload,
 } from '#/features/interactions/v1/interaction.type'
 
 const GRAPH = `https://graph.facebook.com/${envVariables.FACEBOOK_GRAPH_VERSION}`
@@ -574,6 +576,60 @@ export const interactionService = {
       }
     }
     const updated = await dbService.setCommentHidden(postId, commentId, hidden)
+    if (updated) {
+      sseBroker.broadcast('post_updated', updated)
+    }
+    return updated ?? null
+  },
+
+  /**
+   * Like/unlike a comment on behalf of the Page via the Graph API (POST/DELETE on the
+   * comment's `likes` edge). Requires `pages_manage_engagement`. Also mirrors the state
+   * on the local copy so the dashboard reflects the page's reaction.
+   */
+  async likeComment(payload: TLikeCommentPayload): Promise<IPost | null> {
+    const { postId, commentId, liked } = payload
+    const post = await interactionRepository.getPost(postId)
+    const conn = await resolveConnection(post?.pageId)
+    if (conn?.accessToken) {
+      const res = await fetch(`${GRAPH}/${commentId}/likes?access_token=${conn.accessToken}`, {
+        method: liked ? 'POST' : 'DELETE',
+      })
+      if (!res.ok) {
+        const err = (await res.json()) as { error?: { message?: string } }
+        logger.error(err, 'Failed to toggle comment like')
+        throw new Error(err.error?.message || `Could not ${liked ? 'like' : 'unlike'} the comment on Facebook.`)
+      }
+    }
+    const updated = await dbService.setCommentLiked(postId, commentId, liked)
+    if (updated) {
+      sseBroker.broadcast('post_updated', updated)
+    }
+    return updated ?? null
+  },
+
+  /**
+   * Delete a comment on the Page's post via the Graph API (DELETE on the comment node).
+   * Requires `pages_manage_engagement`. Facebook removes the comment's replies too, so
+   * the local copy drops the comment and any replies threaded under it.
+   */
+  async deleteComment(payload: TDeleteCommentPayload): Promise<IPost | null> {
+    const { postId, commentId } = payload
+    const post = await interactionRepository.getPost(postId)
+    const conn = await resolveConnection(post?.pageId)
+    // Only real Facebook comments ({page}_{id} style) exist on Graph; local-only page
+    // replies are just removed from the dashboard.
+    if (conn?.accessToken && commentId.includes('_')) {
+      const res = await fetch(`${GRAPH}/${commentId}?access_token=${conn.accessToken}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) {
+        const err = (await res.json()) as { error?: { message?: string } }
+        logger.error(err, 'Failed to delete comment')
+        throw new Error(err.error?.message || 'Could not delete the comment on Facebook.')
+      }
+    }
+    const updated = await dbService.deleteComment(postId, commentId)
     if (updated) {
       sseBroker.broadcast('post_updated', updated)
     }

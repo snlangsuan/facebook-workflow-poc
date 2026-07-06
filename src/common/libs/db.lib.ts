@@ -16,6 +16,21 @@ export interface IFbPageConnection {
   autoReplyComment?: boolean
 }
 
+/**
+ * A TikTok account connected via Login Kit (OAuth 2.0). Stored separately from
+ * Facebook page connections under `tiktok_connections/{openId}`.
+ */
+export interface ITiktokConnection {
+  openId: string
+  displayName: string
+  avatarUrl?: string
+  accessToken: string
+  refreshToken?: string
+  scope?: string
+  expiresIn?: number
+  createdAt?: string
+}
+
 export interface IMessage {
   id: string
   senderId: string
@@ -49,6 +64,7 @@ export interface IComment {
   status?: 'sent' | 'failed'
   error?: string
   hidden?: boolean
+  liked?: boolean
 }
 
 export interface IPost {
@@ -393,6 +409,36 @@ export const dbService = {
     return post
   },
 
+  setCommentLiked: async (postId: string, commentId: string, liked: boolean): Promise<IPost | undefined> => {
+    const ref = rtdb.ref(`posts/${postId}`)
+    const post = (await ref.once('value')).val() as IPost | null
+    if (!post?.comments) {
+      return undefined
+    }
+    const target = post.comments.find((c) => c.id === commentId)
+    if (!target) {
+      return undefined
+    }
+    target.liked = liked
+    await ref.set(post)
+    return post
+  },
+
+  /**
+   * Remove a comment (and any of its direct replies) from a post — mirrors Facebook,
+   * where deleting a comment also removes the replies threaded under it.
+   */
+  deleteComment: async (postId: string, commentId: string): Promise<IPost | undefined> => {
+    const ref = rtdb.ref(`posts/${postId}`)
+    const post = (await ref.once('value')).val() as IPost | null
+    if (!post?.comments) {
+      return undefined
+    }
+    post.comments = post.comments.filter((c) => c.id !== commentId && c.parentId !== commentId)
+    await ref.set(post)
+    return post
+  },
+
   setPostAutoStatus: async (postId: string, status: TAutoReplyStatus, error?: string): Promise<IPost | undefined> => {
     const ref = rtdb.ref(`posts/${postId}`)
     const post = (await ref.once('value')).val() as IPost | null
@@ -423,6 +469,32 @@ export const dbService = {
       return { processedAt: formatToIso() }
     })
     return result.committed
+  },
+
+  getTiktokConnection: async (openId: string): Promise<ITiktokConnection | undefined> => {
+    const snapshot = await rtdb.ref(`tiktok_connections/${openId}`).once('value')
+    return (snapshot.val() as ITiktokConnection | null) || undefined
+  },
+
+  saveTiktokConnection: async (connection: ITiktokConnection): Promise<void> => {
+    const ref = rtdb.ref(`tiktok_connections/${connection.openId}`)
+    const existing = (await ref.once('value')).val() as ITiktokConnection | null
+    // RTDB rejects `undefined` values, so only include optional fields when present.
+    const record: ITiktokConnection = {
+      openId: connection.openId,
+      displayName: connection.displayName,
+      accessToken: connection.accessToken,
+      createdAt: existing?.createdAt ?? formatToIso(),
+    }
+    if (connection.avatarUrl !== undefined) record.avatarUrl = connection.avatarUrl
+    if (connection.refreshToken !== undefined) record.refreshToken = connection.refreshToken
+    if (connection.scope !== undefined) record.scope = connection.scope
+    if (connection.expiresIn !== undefined) record.expiresIn = connection.expiresIn
+    await ref.set(record)
+  },
+
+  deleteTiktokConnection: async (openId: string): Promise<void> => {
+    await rtdb.ref(`tiktok_connections/${openId}`).remove()
   },
 
   resetMockData: async (): Promise<void> => {

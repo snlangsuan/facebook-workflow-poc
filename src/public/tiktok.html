@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TikTok Login Workflow</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'], display: ['Outfit', 'sans-serif'] },
+          colors: {
+            tiktok: { cyan: '#25F4EE', red: '#FE2C55' },
+          },
+        },
+      },
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap');
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      display: inline-block;
+    }
+    @keyframes glow {
+      0%, 100% { opacity: 0.35; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(1.1); }
+    }
+    .animate-glow { animation: glow 7s infinite ease-in-out; }
+  </style>
+</head>
+<body class="bg-black text-slate-100 flex items-center justify-center h-screen w-screen font-sans overflow-hidden antialiased select-none relative">
+
+  <!-- ambient brand glow -->
+  <div class="pointer-events-none fixed -top-40 -left-40 w-[480px] h-[480px] rounded-full bg-tiktok-cyan/20 blur-[140px] animate-glow"></div>
+  <div class="pointer-events-none fixed -bottom-40 -right-40 w-[480px] h-[480px] rounded-full bg-tiktok-red/20 blur-[140px] animate-glow"></div>
+
+  <div class="w-[400px] bg-[#121212] border border-white/10 rounded-3xl p-9 flex flex-col gap-6 shadow-2xl relative z-10">
+
+    <!-- Brand header -->
+    <div class="flex flex-col gap-3">
+      <div class="flex items-center gap-2.5">
+        <svg class="w-9 h-9" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M33.5 8.5c1.2 3.6 3.9 6.4 7.5 7.3v6.1c-2.9.1-5.6-.8-7.9-2.4v10.8c0 6.6-5.4 12-12 12s-12-5.4-12-12 5.4-12 12-12c.6 0 1.2 0 1.8.1v6.4c-.6-.2-1.2-.3-1.8-.3-3.1 0-5.6 2.5-5.6 5.6s2.5 5.6 5.6 5.6 5.6-2.5 5.6-5.6V8.5h6.8z" fill="#25F4EE" transform="translate(-2 -1.5)"/>
+          <path d="M33.5 8.5c1.2 3.6 3.9 6.4 7.5 7.3v6.1c-2.9.1-5.6-.8-7.9-2.4v10.8c0 6.6-5.4 12-12 12s-12-5.4-12-12 5.4-12 12-12c.6 0 1.2 0 1.8.1v6.4c-.6-.2-1.2-.3-1.8-.3-3.1 0-5.6 2.5-5.6 5.6s2.5 5.6 5.6 5.6 5.6-2.5 5.6-5.6V8.5h6.8z" fill="#FE2C55" transform="translate(2 1.5)"/>
+          <path d="M33.5 8.5c1.2 3.6 3.9 6.4 7.5 7.3v6.1c-2.9.1-5.6-.8-7.9-2.4v10.8c0 6.6-5.4 12-12 12s-12-5.4-12-12 5.4-12 12-12c.6 0 1.2 0 1.8.1v6.4c-.6-.2-1.2-.3-1.8-.3-3.1 0-5.6 2.5-5.6 5.6s2.5 5.6 5.6 5.6 5.6-2.5 5.6-5.6V8.5h6.8z" fill="#FFFFFF"/>
+        </svg>
+        <span class="font-display text-xl font-bold tracking-tight text-white">TikTok</span>
+      </div>
+      <div>
+        <h1 class="text-2xl font-bold text-white">Sign in with TikTok</h1>
+        <p class="text-slate-400 text-sm mt-1 leading-relaxed">Connect your TikTok account to manage it here. We use TikTok Login Kit (OAuth 2.0) — your password is never shared with us.</p>
+      </div>
+    </div>
+
+    <!-- State: not connected -->
+    <div id="loginState" class="flex flex-col gap-4">
+      <button id="tiktokLoginBtn" onclick="startLogin()"
+        class="h-12 bg-tiktok-red hover:brightness-110 active:scale-[0.99] text-white text-sm font-semibold rounded-xl transition-all flex items-center justify-center gap-2.5 shadow-lg shadow-tiktok-red/20">
+        <svg class="w-5 h-5" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M33.5 8.5c1.2 3.6 3.9 6.4 7.5 7.3v6.1c-2.9.1-5.6-.8-7.9-2.4v10.8c0 6.6-5.4 12-12 12s-12-5.4-12-12 5.4-12 12-12c.6 0 1.2 0 1.8.1v6.4c-.6-.2-1.2-.3-1.8-.3-3.1 0-5.6 2.5-5.6 5.6s2.5 5.6 5.6 5.6 5.6-2.5 5.6-5.6V8.5h6.8z" fill="currentColor"/>
+        </svg>
+        <span id="tiktokLoginBtnLabel">Continue with TikTok</span>
+      </button>
+
+      <div id="loginError" class="hidden text-sm text-tiktok-red bg-tiktok-red/10 border border-tiktok-red/20 rounded-xl px-4 py-3 leading-relaxed"></div>
+
+      <p class="text-[11px] text-slate-500 text-center leading-relaxed">
+        You'll be redirected to TikTok to authorize access, then sent back here.
+      </p>
+    </div>
+
+    <!-- State: connected -->
+    <div id="connectedState" class="hidden flex flex-col gap-5">
+      <div class="flex items-center gap-4 bg-white/[0.03] border border-white/10 rounded-2xl p-4">
+        <img id="profileAvatar" src="" alt="" class="w-14 h-14 rounded-full object-cover border border-white/10 bg-[#1c1c1c]"
+          onerror="this.src='https://api.dicebear.com/7.x/identicon/svg?seed=tiktok'">
+        <div class="min-w-0 flex-1">
+          <h3 id="profileName" class="text-base font-semibold text-white truncate">—</h3>
+          <p class="text-[11px] text-tiktok-cyan mt-1 flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-tiktok-cyan"></span>
+            Connected
+          </p>
+          <p id="profileOpenId" class="text-[11px] text-slate-500 mt-0.5 truncate font-mono"></p>
+        </div>
+      </div>
+      <button id="signOutBtn" onclick="signOut()"
+        class="h-11 bg-white/[0.04] hover:bg-tiktok-red/10 hover:text-tiktok-red hover:border-tiktok-red/25 border border-white/10 rounded-xl text-sm font-medium text-slate-300 transition-all">
+        Disconnect TikTok
+      </button>
+    </div>
+
+    <div class="pt-2 border-t border-white/[0.06] flex items-center justify-center">
+      <a href="/demo/" class="text-[11px] text-slate-500 hover:text-slate-300 transition-colors">← Back to Facebook dashboard</a>
+    </div>
+  </div>
+
+  <script>
+    const BASE = '/demo';
+    const STORAGE_KEY = 'tiktokConnection';
+
+    function showError(message) {
+      const el = document.getElementById('loginError');
+      el.textContent = message;
+      el.classList.remove('hidden');
+    }
+
+    function renderConnected(conn) {
+      document.getElementById('loginState').classList.add('hidden');
+      document.getElementById('connectedState').classList.remove('hidden');
+      document.getElementById('profileName').textContent = conn.name || 'TikTok user';
+      document.getElementById('profileOpenId').textContent = conn.openId ? `open_id: ${conn.openId}` : '';
+      const avatar = document.getElementById('profileAvatar');
+      avatar.src = conn.avatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(conn.openId || conn.name || 'tiktok')}`;
+    }
+
+    function renderLogin() {
+      document.getElementById('connectedState').classList.add('hidden');
+      document.getElementById('loginState').classList.remove('hidden');
+    }
+
+    // Read the result the callback redirected us back with, then clean the URL.
+    function consumeCallbackResult() {
+      const params = new URLSearchParams(window.location.search);
+      const status = params.get('status');
+      if (!status) return false;
+
+      // Strip query params so a refresh doesn't replay the result.
+      window.history.replaceState({}, document.title, window.location.pathname);
+
+      if (status === 'success') {
+        const conn = {
+          openId: params.get('open_id') || '',
+          name: params.get('name') || 'TikTok user',
+          avatar: params.get('avatar') || '',
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(conn));
+        renderConnected(conn);
+        return true;
+      }
+
+      if (status === 'error') {
+        showError(params.get('reason') || 'TikTok login failed. Please try again.');
+      }
+      return true;
+    }
+
+    function startLogin() {
+      const btn = document.getElementById('tiktokLoginBtn');
+      btn.disabled = true;
+      btn.classList.add('opacity-70', 'cursor-not-allowed');
+      document.getElementById('tiktokLoginBtnLabel').textContent = 'Redirecting to TikTok…';
+      // Full-page navigation kicks off the server-side OAuth round-trip.
+      window.location.href = `${BASE}/api/v1/tiktok/authorize`;
+    }
+
+    async function signOut() {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      const conn = stored ? JSON.parse(stored) : null;
+      if (conn && conn.openId) {
+        try {
+          await fetch(`${BASE}/api/v1/tiktok/connections/${encodeURIComponent(conn.openId)}`, { method: 'DELETE' });
+        } catch (e) {}
+      }
+      localStorage.removeItem(STORAGE_KEY);
+      renderLogin();
+    }
+
+    function init() {
+      // A fresh callback result takes priority over any stored session.
+      if (consumeCallbackResult()) return;
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        try { renderConnected(JSON.parse(stored)); return; } catch (e) {}
+      }
+      renderLogin();
+    }
+
+    init();
+  </script>
+</body>
+</html>
