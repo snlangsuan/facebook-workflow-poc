@@ -1,6 +1,11 @@
 name: Deploy API
 
 on:
+  # Auto-run: every push to main deploys automatically (target resolved in the setup job).
+  push:
+    branches:
+      - main
+  # Manual run: still available for on-demand deploys to a chosen environment.
   workflow_dispatch:
     inputs:
       deploy_target:
@@ -15,7 +20,7 @@ on:
         required: false
         type: string
 
-run-name: Deploy to ${{ inputs.deploy_target }} by @${{ github.actor }} - ${{ inputs.reason }}
+run-name: Deploy by @${{ github.actor }} - ${{ inputs.reason || github.event.head_commit.message || github.sha }}
 
 env:
   REGISTRY: ghcr.io
@@ -23,7 +28,31 @@ env:
   CONTAINER_NAME: omni-api
 
 jobs:
+  # Resolve the deploy target once so both build and deploy share it. A manual run uses
+  # the chosen input; an automatic push has no input, so it defaults by branch.
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      target: ${{ steps.resolve.outputs.target }}
+    steps:
+      - name: Resolve deploy target
+        id: resolve
+        shell: bash
+        run: |
+          TARGET="${{ inputs.deploy_target }}"
+          if [ -z "$TARGET" ]; then
+            # Automatic (push) run: main -> prod, any other branch -> dev.
+            if [ "${{ github.ref_name }}" = "main" ]; then
+              TARGET="prod"
+            else
+              TARGET="dev"
+            fi
+          fi
+          echo "target=$TARGET" >> "$GITHUB_OUTPUT"
+          echo "Resolved deploy target: $TARGET"
+
   build:
+    needs: setup
     runs-on: ubuntu-22.04
     permissions:
       packages: write
@@ -93,20 +122,20 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=${{ inputs.deploy_target }}
+            type=raw,value=${{ needs.setup.outputs.target }}
             type=sha,format=short
 
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: deploy/${{ inputs.deploy_target }}.Dockerfile
+          file: deploy/${{ needs.setup.outputs.target }}.Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
   deploy:
-    needs: build
+    needs: [setup, build]
     runs-on: ubuntu-latest
     steps:
       - name: Deploy via SSH
@@ -121,7 +150,7 @@ jobs:
             set -euo pipefail
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.deploy_target }}"
+            IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.setup.outputs.target }}"
             echo "Pulling Docker image from GHCR: ${IMAGE}"
             docker pull "${IMAGE}"
 

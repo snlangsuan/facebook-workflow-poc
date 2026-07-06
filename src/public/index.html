@@ -550,7 +550,7 @@
         div.onclick = () => selectWizardPage(page);
         
         div.innerHTML = `
-          <img src="https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(page.name)}" class="w-10 h-10 rounded-lg">
+          <img src="${pageAvatarUrl(page.id)}" onerror="this.onerror=null;this.src='https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(page.name)}'" class="w-10 h-10 rounded-lg object-cover bg-slate-800">
           <div class="flex-1 min-w-0">
             <h4 class="text-sm font-semibold truncate">${page.name}</h4>
             <span class="text-xs text-slate-500">ID: ${page.id}</span>
@@ -710,10 +710,12 @@
       }
     }
 
-    // Public page profile picture (works in <img> without a token).
-    function pageAvatarUrl() {
-      return connectedPage
-        ? `https://graph.facebook.com/${fbGraphVersion}/${connectedPage.id}/picture?type=square&width=80&height=80`
+    // Public page profile picture (works in <img> without a token). Defaults to the
+    // active page, but accepts a pageId so it can be used in lists of multiple pages.
+    function pageAvatarUrl(pageId) {
+      const id = pageId || (connectedPage && connectedPage.id);
+      return id
+        ? `https://graph.facebook.com/${fbGraphVersion}/${id}/picture?type=square&width=80&height=80`
         : '';
     }
 
