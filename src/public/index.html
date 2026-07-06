@@ -522,7 +522,7 @@
         } else {
           showAlertDialog('Login Cancelled', 'Facebook login was cancelled.');
         }
-      }, { scope: 'pages_show_list,pages_messaging,pages_read_engagement,pages_manage_metadata,pages_manage_posts' });
+      }, { scope: 'pages_show_list,pages_messaging,pages_read_engagement,pages_manage_metadata,pages_manage_posts,pages_manage_engagement' });
     }
 
     async function fetchRealPages(token) {
@@ -640,7 +640,12 @@
         return;
       }
       nameEl.innerText = connectedPage.name;
-      imgEl.src = `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(connectedPage.name)}`;
+      imgEl.classList.add('object-cover', 'bg-slate-800');
+      imgEl.onerror = function () {
+        this.onerror = null;
+        this.src = `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(connectedPage.name)}`;
+      };
+      imgEl.src = pageAvatarUrl(connectedPage.id);
       statusEl.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Connected';
       statusEl.className = 'text-[11px] text-emerald-400/90 mt-0.5 flex items-center gap-1.5';
     }
@@ -677,7 +682,7 @@
         return `
           <div class="flex flex-col gap-1 group">
             <div class="flex items-center gap-2.5 px-3 py-2 rounded-xl ${isActivePage ? 'bg-slate-800/40 border border-slate-700/50' : ''}">
-              <img src="https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(p.name)}" class="w-6 h-6 rounded-lg">
+              <img src="${pageAvatarUrl(p.id)}" onerror="this.onerror=null;this.src='https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(p.name)}'" class="w-6 h-6 rounded-lg object-cover bg-slate-800">
               <span class="text-xs font-bold truncate flex-1">${p.name}</span>
               <button onclick="removePage('${p.id}', event)" title="Remove page"
                 class="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-md text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all text-sm leading-none">✕</button>
@@ -1288,7 +1293,7 @@
       container.innerHTML = `
         <div class="p-6 border-b border-slate-800/85 bg-slate-950/5">
           <div class="flex items-center gap-3.5 mb-4">
-            <img src="https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(connectedPage ? connectedPage.name : 'FB')}" class="w-9 h-9 rounded-lg">
+            <img src="${connectedPage ? pageAvatarUrl(connectedPage.id) : ''}" onerror="this.onerror=null;this.src='https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(connectedPage ? connectedPage.name : 'FB')}'" class="w-9 h-9 rounded-lg object-cover bg-slate-800">
             <div class="flex-1 min-w-0">
               <h4 class="text-sm font-semibold">${connectedPage ? connectedPage.name : 'Page'}</h4>
               <span class="text-[10px] text-slate-400">Published on ${dateStr}</span>
