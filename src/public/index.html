@@ -495,6 +495,11 @@
     function showPageConnectionWizard() {
       ensureFacebookSDK(); // โหลด FB SDK เฉพาะตอนเปิด wizard เพื่อเชื่อมเพจใหม่
       document.getElementById('wizardOverlay').style.display = 'flex';
+      // Reset to the initial "log in" state: show the login button, hide the page picker.
+      document.getElementById('fbAuthBtn').classList.remove('hidden');
+      document.getElementById('fbPagesSection').classList.add('hidden');
+      selectedWizardPageObj = null;
+      document.getElementById('connectPageBtn').disabled = true;
       const container = document.getElementById('fbPagesList');
       container.innerHTML = '<div class="text-center text-slate-400 text-sm">Please log in to Facebook above.</div>';
     }
@@ -523,6 +528,8 @@
     async function fetchRealPages(token) {
       const container = document.getElementById('fbPagesList');
       container.innerHTML = '<div class="text-center text-slate-400">Fetching managed pages...</div>';
+      // Login is done — hide the "Continue with Facebook" button and reveal the page picker.
+      document.getElementById('fbAuthBtn').classList.add('hidden');
       document.getElementById('fbPagesSection').classList.remove('hidden');
 
       try {
