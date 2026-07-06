@@ -182,6 +182,34 @@ function toHistory(messages: IMessage[]): IGeminiHistoryItem[] {
   }))
 }
 
+/**
+ * Fetch a Messenger customer's public profile (display name + profile picture) from the
+ * Graph API using the page access token. This relies on Business Asset User Profile Access,
+ * which grants the app the name and profile photo of users who message the connected Page.
+ * Returns an empty object on any failure so the inbox falls back to a generated avatar.
+ */
+async function fetchUserProfile(
+  pageAccessToken: string,
+  psid: string,
+): Promise<{ name?: string; profilePic?: string }> {
+  try {
+    const res = await fetch(`${GRAPH}/${psid}?fields=name,profile_pic&access_token=${pageAccessToken}`)
+    const data = (await res.json()) as {
+      error?: { message?: string }
+      name?: string
+      profile_pic?: string
+    }
+    if (!res.ok || data.error) {
+      logger.warn(data.error ?? data, 'Could not fetch customer profile (Business Asset User Profile Access)')
+      return {}
+    }
+    return { name: data.name, profilePic: data.profile_pic }
+  } catch (error) {
+    logger.warn(error, 'Failed to fetch customer profile from Graph API')
+    return {}
+  }
+}
+
 async function sendMessengerReply(pageAccessToken: string, recipientId: string, text: string): Promise<void> {
   const res = await fetch(`${GRAPH}/me/messages?access_token=${pageAccessToken}`, {
     method: 'POST',
@@ -292,17 +320,36 @@ export const interactionService = {
    * On any failure the conversation is flagged `failed` for manual admin takeover.
    */
   async receiveCustomerMessage(payload: TCustomerMessagePayload): Promise<IConversation> {
-    const conv = await interactionRepository.addMessage(
+    const conn = await resolveConnection(payload.pageId)
+
+    // Business Asset User Profile Access: resolve the customer's real name + profile photo
+    // from their PSID so the inbox shows who is messaging instead of a raw id.
+    let displayName = payload.senderName
+    let avatar: string | undefined
+    if (conn?.accessToken) {
+      const profile = await fetchUserProfile(conn.accessToken, payload.senderId)
+      if (profile.name) {
+        displayName = profile.name
+      }
+      if (profile.profilePic) {
+        avatar = profile.profilePic
+      }
+    }
+
+    let conv = await interactionRepository.addMessage(
       payload.senderId,
-      payload.senderName,
+      displayName,
       payload.senderId,
-      payload.senderName,
+      displayName,
       payload.text,
       { pageId: payload.pageId },
     )
+    // Backfill the resolved identity (also covers a conversation seeded before we had a token).
+    if (avatar || displayName !== payload.senderName) {
+      conv = (await dbService.updateConversationProfile(payload.senderId, displayName, avatar)) ?? conv
+    }
     sseBroker.broadcast('conversation_updated', conv)
 
-    const conn = await resolveConnection(payload.pageId)
     // AI auto-reply can be turned off per page for the inbox.
     if (conn?.autoReplyInbox === false) {
       return conv

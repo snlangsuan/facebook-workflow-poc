@@ -272,6 +272,29 @@ export const dbService = {
     return conv
   },
 
+  /**
+   * Update a conversation's display identity (name + profile photo) — used after
+   * resolving the customer's real profile via Business Asset User Profile Access,
+   * so the inbox shows who is messaging instead of a raw PSID.
+   */
+  updateConversationProfile: async (
+    convId: string,
+    name: string,
+    avatar?: string,
+  ): Promise<IConversation | undefined> => {
+    const ref = rtdb.ref(`conversations/${convId}`)
+    const conv = (await ref.once('value')).val() as IConversation | null
+    if (!conv) {
+      return undefined
+    }
+    conv.name = name
+    if (avatar) {
+      conv.avatar = avatar
+    }
+    await ref.set(conv)
+    return conv
+  },
+
   setConversationAutoStatus: async (
     convId: string,
     status: TAutoReplyStatus,

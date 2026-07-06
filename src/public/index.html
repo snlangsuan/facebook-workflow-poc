@@ -920,7 +920,7 @@
 
           div.innerHTML = `
             <div class="relative flex-shrink-0">
-              <img src="${c.avatar}" class="w-11 h-11 rounded-full object-cover">
+              <img src="${c.avatar}" onerror="this.onerror=null;this.src='https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(c.name)}'" class="w-11 h-11 rounded-full object-cover bg-slate-800">
               <div class="absolute right-0.5 bottom-0.5 w-2.5 h-2.5 rounded-full ${dotClass} border-2 border-slate-900"></div>
             </div>
             <div class="flex-1 min-w-0 flex flex-col gap-1">
@@ -1003,7 +1003,7 @@
       container.innerHTML = `
         <div class="px-6 py-5 border-b border-slate-800/85 flex items-center justify-between">
           <div class="flex items-center gap-3.5">
-            <img src="${conv.avatar}" class="w-10 h-10 rounded-full object-cover">
+            <img src="${conv.avatar}" onerror="this.onerror=null;this.src='https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(conv.name)}'" class="w-10 h-10 rounded-full object-cover bg-slate-800">
             <div>
               <h3 class="text-sm font-semibold">${conv.name}</h3>
               <p class="text-xs text-slate-400">Messenger Inbox</p>
