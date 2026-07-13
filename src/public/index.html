@@ -247,6 +247,10 @@
             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
             Load from Page
           </button>
+          <button id="clearInboxBtn" onclick="clearInbox()" title="Delete all conversations for this Page" class="hidden items-center gap-1.5 h-8 px-3 bg-white/[0.03] hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/25 border border-white/[0.07] active:scale-[0.98] rounded-md text-xs font-medium text-slate-400 transition-colors">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            Clear
+          </button>
           <button id="addPostBtn" onclick="openAddPostDialog()" class="hidden h-8 px-3 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] rounded-md text-xs font-medium text-white transition-colors">+ Add post</button>
         </div>
         <div class="relative">
@@ -822,6 +826,14 @@
             if (belongsToActivePage && (activeTab !== 'inbox' || selectedActiveId !== data.id)) {
               flashNewActivity(data.pageId, 'inbox');
             }
+          } else if (event === 'conversations_cleared') {
+            if (activeTab === 'inbox') {
+              selectedActiveId = null;
+              const openDetail = document.getElementById('openDetailContainer');
+              if (openDetail) openDetail.remove();
+              document.getElementById('emptyWorkspaceState').style.display = 'flex';
+              fetchConversationsList(false);
+            }
           } else if (event === 'post_updated') {
             if (activeTab === 'post') {
               fetchPostsList(false);
@@ -893,6 +905,9 @@
       const loadBtn = document.getElementById('loadInboxBtn');
       loadBtn.classList.toggle('hidden', !showLoad);
       loadBtn.classList.toggle('inline-flex', showLoad);
+      const clearBtn = document.getElementById('clearInboxBtn');
+      clearBtn.classList.toggle('hidden', !showLoad);
+      clearBtn.classList.toggle('inline-flex', showLoad);
       if (tab === 'inbox') {
         document.getElementById('listTitle').innerText = pageLabel ? `${pageLabel} · Inbox` : 'Conversations';
         fetchConversationsList();
@@ -1095,6 +1110,30 @@
           }
         } catch (err) {
           showAlertDialog('Load Failed', err.message);
+        }
+      });
+    }
+
+    // Delete all conversations for the active page (or all pages if none is active).
+    async function clearInbox() {
+      const label = connectedPage ? `"${connectedPage.name}"` : 'all pages';
+      const ok = await showConfirmDialog('Clear Inbox', `Delete all conversations for ${label}?\nThis cannot be undone.`, 'Clear');
+      if (!ok) return;
+      const btn = document.getElementById('clearInboxBtn');
+      await runWithLoading(btn, async () => {
+        try {
+          const q = connectedPage ? `?pageId=${encodeURIComponent(connectedPage.id)}` : '';
+          const res = await apiFetch(`/api/v1/interactions/conversations${q}`, { method: 'DELETE' });
+          if (!res.ok) throw new Error('Failed to clear the inbox.');
+          // Reset the workspace since the open conversation may be gone.
+          selectedActiveId = null;
+          const openDetail = document.getElementById('openDetailContainer');
+          if (openDetail) openDetail.remove();
+          document.getElementById('emptyWorkspaceState').style.display = 'flex';
+          document.getElementById('emptyStateText').innerText = 'Select a conversation or post to get started';
+          await fetchConversationsList(false);
+        } catch (err) {
+          showAlertDialog('Clear Failed', err.message);
         }
       });
     }

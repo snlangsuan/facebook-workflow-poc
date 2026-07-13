@@ -218,6 +218,12 @@ export const interactionController = {
     return c.json(result)
   },
 
+  clearConversations: async <E extends Env, P extends string, I extends Input>(c: Context<E, P, I>) => {
+    const pageId = c.req.query('pageId')
+    const result = await interactionService.clearConversations(pageId)
+    return c.json({ success: true, ...result })
+  },
+
   syncProfile: async <
     E extends Env,
     P extends string,

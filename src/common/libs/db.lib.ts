@@ -529,6 +529,28 @@ export const dbService = {
     await rtdb.ref(`tiktok_connections/${openId}`).remove()
   },
 
+  clearConversations: async (): Promise<void> => {
+    await rtdb.ref('conversations').remove()
+  },
+
+  // Remove only the conversations tagged to a given page (used when a page is disconnected
+  // so its inbox data is cleaned up too). Returns the number of conversations removed.
+  deleteConversationsByPageId: async (pageId: string): Promise<number> => {
+    const snapshot = await rtdb.ref('conversations').once('value')
+    const all = (snapshot.val() ?? {}) as Record<string, IConversation>
+    const updates: Record<string, null> = {}
+    for (const [key, conv] of Object.entries(all)) {
+      if (conv?.pageId === pageId) {
+        updates[key] = null
+      }
+    }
+    const count = Object.keys(updates).length
+    if (count > 0) {
+      await rtdb.ref('conversations').update(updates)
+    }
+    return count
+  },
+
   resetMockData: async (): Promise<void> => {
     await rtdb.ref('connections').remove()
     await rtdb.ref('conversations').remove()

@@ -39,6 +39,16 @@ export const connectionService = {
       }
     }
     await connectionRepository.delete(userId, pageId)
+
+    // Clean up the inbox data tied to the removed connection so stale conversations
+    // don't linger. Page-scoped delete removes just that page; a full disconnect wipes all.
+    if (pageId) {
+      const removed = await dbService.deleteConversationsByPageId(pageId)
+      logger.info({ pageId, removed }, '🧹 Cleared conversations for removed page')
+    } else {
+      await dbService.clearConversations()
+      logger.info({ userId }, '🧹 Cleared all conversations on full disconnect')
+    }
   },
 
   async unsubscribePageFromWebhook(pageId: string, pageAccessToken: string): Promise<void> {

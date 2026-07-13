@@ -10,6 +10,7 @@ import {
   listConversationsSpec,
   getConversationSpec,
   importInboxSpec,
+  clearConversationsSpec,
   syncProfileSpec,
   replyToMessageSpec,
   listPostsSpec,
@@ -61,6 +62,13 @@ interactionsRouter.get(
   authMiddleware(),
   zValidator('param', conversationParamPayloadSchema),
   interactionController.getConversation,
+)
+
+interactionsRouter.delete(
+  '/conversations',
+  clearConversationsSpec,
+  authMiddleware(),
+  interactionController.clearConversations,
 )
 
 interactionsRouter.post(

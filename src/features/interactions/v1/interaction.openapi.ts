@@ -116,6 +116,16 @@ export const importInboxSpec = describeRoute({
   },
 })
 
+export const clearConversationsSpec = describeRoute({
+  tags: ['Conversations'],
+  summary: 'Clear inbox conversations (optionally scoped to a pageId)',
+  responses: {
+    200: {
+      description: 'Conversations cleared',
+    },
+  },
+})
+
 export const syncProfileSpec = describeRoute({
   tags: ['Conversations'],
   summary: "Re-fetch a customer's profile via Business Asset User Profile Access",

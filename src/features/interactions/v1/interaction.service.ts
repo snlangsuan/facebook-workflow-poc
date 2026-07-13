@@ -321,6 +321,22 @@ export const interactionService = {
   },
 
   /**
+   * Clear inbox conversations. With a pageId only that page's conversations are removed;
+   * without one the whole inbox is wiped. Broadcasts so open clients refresh their list.
+   */
+  async clearConversations(pageId?: string): Promise<{ cleared: number }> {
+    let cleared = -1
+    if (pageId) {
+      cleared = await dbService.deleteConversationsByPageId(pageId)
+    } else {
+      await dbService.clearConversations()
+    }
+    logger.info({ pageId: pageId ?? 'all', cleared }, '🧹 [INBOX] conversations cleared')
+    sseBroker.broadcast('conversations_cleared', { pageId })
+    return { cleared }
+  },
+
+  /**
    * Manually re-resolve a conversation's customer profile (name + photo) from the Graph API
    * via Business Asset User Profile Access. The conversation id IS the customer's PSID, so we
    * fetch against it with the connected Page token. Drives the "Sync Profile" button in the
