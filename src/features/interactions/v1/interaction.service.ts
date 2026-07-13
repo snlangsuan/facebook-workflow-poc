@@ -351,6 +351,32 @@ async function seedConversationFromThread(pageId: string, thread: IGraphThread):
   return conv
 }
 
+/**
+ * Seed one page of Graph API threads, isolating per-thread failures so a single bad thread
+ * (e.g. a DB write hiccup) never aborts the whole import or discards already-seeded rows.
+ * Returns the seeded conversations plus how many threads were skipped on error.
+ */
+async function seedThreadsPage(
+  pageId: string,
+  threads: IGraphThread[],
+): Promise<{ conversations: IConversation[]; skipped: number }> {
+  const conversations: IConversation[] = []
+  let skipped = 0
+  for (const thread of threads) {
+    try {
+      const conv = await seedConversationFromThread(pageId, thread)
+      if (conv) {
+        conversations.push(conv)
+      }
+    } catch (threadError) {
+      skipped += 1
+      const psid = thread.participants?.data?.find((p) => p.id && p.id !== pageId)?.id
+      logger.warn({ err: threadError, psid }, '⚠️ [INBOX] skipped a conversation during import')
+    }
+  }
+  return { conversations, skipped }
+}
+
 export const interactionService = {
   async listConversations(): Promise<IConversation[]> {
     return interactionRepository.listConversations()
@@ -425,7 +451,7 @@ export const interactionService = {
    */
   async importConversationsFromPage(
     pageId?: string,
-  ): Promise<{ imported: number; conversations: IConversation[]; error?: string }> {
+  ): Promise<{ imported: number; skipped?: number; conversations: IConversation[]; error?: string }> {
     const conn = await resolveConnection(pageId)
     if (!conn?.accessToken) {
       return { imported: 0, conversations: [], error: 'No connected Page token available' }
@@ -444,6 +470,7 @@ export const interactionService = {
     try {
       const conversations: IConversation[] = []
       let pages = 0
+      let skipped = 0
       while (url && pages < MAX_CONVERSATION_PAGES) {
         const res = await fetch(url)
         const data = (await res.json()) as {
@@ -460,22 +487,19 @@ export const interactionService = {
           break
         }
 
-        for (const thread of data.data ?? []) {
-          const conv = await seedConversationFromThread(conn.id, thread)
-          if (conv) {
-            conversations.push(conv)
-          }
-        }
+        const page = await seedThreadsPage(conn.id, data.data ?? [])
+        conversations.push(...page.conversations)
+        skipped += page.skipped
 
         url = data.paging?.next
         pages += 1
       }
 
       logger.info(
-        { imported: conversations.length, pagesFetched: pages, pageId: conn.id },
+        { imported: conversations.length, skipped, pagesFetched: pages, pageId: conn.id },
         '📥 [INBOX] Page conversations imported',
       )
-      return { imported: conversations.length, conversations }
+      return { imported: conversations.length, skipped, conversations }
     } catch (error) {
       logger.warn(error, 'Failed to import Page conversations from Graph API')
       return { imported: 0, conversations: [], error: 'Failed to reach Graph API' }

@@ -1106,7 +1106,8 @@
           if (data.error) {
             showAlertDialog('Load Warning', data.error);
           } else {
-            showAlertDialog('Conversations Loaded', `Imported ${data.imported} conversation(s) from the Page. Open one and press "Sync Profile" to fetch the customer's name & photo.`);
+            const skippedNote = data.skipped ? ` (${data.skipped} skipped due to errors)` : '';
+            showAlertDialog('Conversations Loaded', `Imported ${data.imported} conversation(s) from the Page${skippedNote}. Open one and press "Sync Profile" to fetch the customer's name & photo.`);
           }
         } catch (err) {
           showAlertDialog('Load Failed', err.message);
