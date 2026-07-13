@@ -18,6 +18,16 @@ import type {
 
 const GRAPH = `https://graph.facebook.com/${envVariables.FACEBOOK_GRAPH_VERSION}`
 const HISTORY_LIMIT = 10
+// Page conversation import: threads fetched per Graph API request, and the max number of
+// `paging.next` pages to follow (100 × 20 = up to 2000 threads) so imports aren't capped
+// at the most recent few while still bounding runaway pagination.
+const CONVERSATION_PAGE_LIMIT = 100
+const MAX_CONVERSATION_PAGES = 20
+
+interface IGraphThread {
+  snippet?: string
+  participants?: { data?: Array<{ id?: string; name?: string }> }
+}
 
 type TSseListener = (data: string) => void
 const sseListeners: TSseListener[] = []
@@ -311,6 +321,36 @@ async function syncPostComments(postId: string, conn: IFbPageConnection): Promis
   await dbService.mergeComments(postId, incoming)
 }
 
+/**
+ * Seed a single Graph API conversation thread into the inbox (id = customer PSID). Returns the
+ * existing conversation untouched if already present, or null when no customer participant is
+ * found. Kept out of the import loop to keep that method's complexity in check.
+ */
+async function seedConversationFromThread(pageId: string, thread: IGraphThread): Promise<IConversation | null> {
+  // participants includes the Page itself (id === pageId) and the customer(s).
+  const customer = thread.participants?.data?.find((p) => p.id && p.id !== pageId)
+  if (!customer?.id) {
+    return null
+  }
+  // Skip if we already have this conversation so repeated imports don't stack messages.
+  const existing = await interactionRepository.getConversation(customer.id)
+  if (existing) {
+    return existing
+  }
+  // Seed with a placeholder name (matches the webhook path) so the real name + photo resolved
+  // later via Business Asset User Profile Access is a clear before/after.
+  const conv = await interactionRepository.addMessage(
+    customer.id,
+    `Customer ${customer.id}`,
+    customer.id,
+    `Customer ${customer.id}`,
+    thread.snippet || '(no message preview)',
+    { pageId },
+  )
+  sseBroker.broadcast('conversation_updated', conv)
+  return conv
+}
+
 export const interactionService = {
   async listConversations(): Promise<IConversation[]> {
     return interactionRepository.listConversations()
@@ -370,12 +410,7 @@ export const interactionService = {
       '👤 [PROFILE] resolved customer identity via Business Asset User Profile Access (manual sync)',
     )
     const updated =
-      (await dbService.updateConversationProfile(
-        conv.id,
-        profile.name ?? conv.name,
-        profile.profilePic,
-        true,
-      )) ?? conv
+      (await dbService.updateConversationProfile(conv.id, profile.name ?? conv.name, profile.profilePic, true)) ?? conv
     sseBroker.broadcast('conversation_updated', updated)
     return { conversation: updated, profileFetched: true }
   },
@@ -396,51 +431,50 @@ export const interactionService = {
       return { imported: 0, conversations: [], error: 'No connected Page token available' }
     }
 
-    const url = `${GRAPH}/${conn.id}/conversations?platform=messenger&fields=participants,snippet,updated_time&limit=25&access_token=${conn.accessToken}`
-    logger.info({ endpoint: `${GRAPH}/${conn.id}/conversations?fields=participants,snippet,updated_time` }, '📥 [INBOX] importing Page conversations from Graph API')
+    // Fetch up to CONVERSATION_PAGE_LIMIT threads per request and follow `paging.next` so the
+    // import isn't capped at the most recent few — a test user's thread can be far down the list.
+    // MAX_CONVERSATION_PAGES bounds the total (100 × 20 = up to 2000 threads) to avoid runaway.
+    let url: string | undefined =
+      `${GRAPH}/${conn.id}/conversations?platform=messenger&fields=participants,snippet,updated_time&limit=${CONVERSATION_PAGE_LIMIT}&access_token=${conn.accessToken}`
+    logger.info(
+      { endpoint: `${GRAPH}/${conn.id}/conversations?fields=participants,snippet,updated_time` },
+      '📥 [INBOX] importing Page conversations from Graph API',
+    )
 
     try {
-      const res = await fetch(url)
-      const data = (await res.json()) as {
-        error?: { message?: string }
-        data?: Array<{
-          snippet?: string
-          participants?: { data?: Array<{ id?: string; name?: string }> }
-        }>
-      }
-      if (!res.ok || data.error) {
-        logger.warn(data.error ?? data, 'Could not import Page conversations')
-        return { imported: 0, conversations: [], error: data.error?.message ?? 'Graph API error' }
-      }
-
       const conversations: IConversation[] = []
-      for (const thread of data.data ?? []) {
-        // participants includes the Page itself (id === pageId) and the customer(s).
-        const customer = thread.participants?.data?.find((p) => p.id && p.id !== conn.id)
-        if (!customer?.id) {
-          continue
+      let pages = 0
+      while (url && pages < MAX_CONVERSATION_PAGES) {
+        const res = await fetch(url)
+        const data = (await res.json()) as {
+          error?: { message?: string }
+          data?: IGraphThread[]
+          paging?: { next?: string }
         }
-        // Skip if we already have this conversation so repeated imports don't stack messages.
-        const existing = await interactionRepository.getConversation(customer.id)
-        if (existing) {
-          conversations.push(existing)
-          continue
+        if (!res.ok || data.error) {
+          logger.warn(data.error ?? data, 'Could not import Page conversations')
+          // Surface the error only if we haven't imported anything yet; otherwise keep partials.
+          if (conversations.length === 0) {
+            return { imported: 0, conversations: [], error: data.error?.message ?? 'Graph API error' }
+          }
+          break
         }
-        // Seed with a placeholder name (matches the webhook path) so the real name + photo
-        // resolved later via Business Asset User Profile Access is a clear before/after.
-        const conv = await interactionRepository.addMessage(
-          customer.id,
-          `Customer ${customer.id}`,
-          customer.id,
-          `Customer ${customer.id}`,
-          thread.snippet || '(no message preview)',
-          { pageId: conn.id },
-        )
-        sseBroker.broadcast('conversation_updated', conv)
-        conversations.push(conv)
+
+        for (const thread of data.data ?? []) {
+          const conv = await seedConversationFromThread(conn.id, thread)
+          if (conv) {
+            conversations.push(conv)
+          }
+        }
+
+        url = data.paging?.next
+        pages += 1
       }
 
-      logger.info({ imported: conversations.length, pageId: conn.id }, '📥 [INBOX] Page conversations imported')
+      logger.info(
+        { imported: conversations.length, pagesFetched: pages, pageId: conn.id },
+        '📥 [INBOX] Page conversations imported',
+      )
       return { imported: conversations.length, conversations }
     } catch (error) {
       logger.warn(error, 'Failed to import Page conversations from Graph API')
@@ -489,8 +523,7 @@ export const interactionService = {
     // Persist the resolved identity + mark it as fetched (covers a conversation seeded
     // before we had a token, and drives the "profile fetched" badge in the inbox UI).
     if (profileFetched || displayName !== payload.senderName) {
-      conv =
-        (await dbService.updateConversationProfile(payload.senderId, displayName, avatar, profileFetched)) ?? conv
+      conv = (await dbService.updateConversationProfile(payload.senderId, displayName, avatar, profileFetched)) ?? conv
     }
     sseBroker.broadcast('conversation_updated', conv)
 
