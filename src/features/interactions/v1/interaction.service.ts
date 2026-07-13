@@ -201,7 +201,7 @@ function toHistory(messages: IMessage[]): IGeminiHistoryItem[] {
 async function fetchUserProfile(
   pageAccessToken: string,
   psid: string,
-): Promise<{ name?: string; profilePic?: string }> {
+): Promise<{ name?: string; profilePic?: string; error?: string }> {
   // Log the exact endpoint (token redacted) so the profile fetch is visible in the server
   // logs / terminal — useful evidence when demoing this permission for App Review.
   logger.info(
@@ -211,18 +211,25 @@ async function fetchUserProfile(
   try {
     const res = await fetch(`${GRAPH}/${psid}?fields=name,profile_pic&access_token=${pageAccessToken}`)
     const data = (await res.json()) as {
-      error?: { message?: string }
+      error?: { message?: string; code?: number; error_subcode?: number }
       name?: string
       profile_pic?: string
     }
     if (!res.ok || data.error) {
-      logger.warn(data.error ?? data, 'Could not fetch customer profile (Business Asset User Profile Access)')
-      return {}
+      // Surface the real Graph reason (message + subcode) so we can tell WHY a given PSID
+      // won't resolve — e.g. subcode 33 = not visible to this Page token / not opted in.
+      const reason = data.error?.message ?? `HTTP ${res.status}`
+      const subcode = data.error?.error_subcode
+      logger.warn(
+        { psid, code: data.error?.code, subcode, reason },
+        'Could not fetch customer profile (Business Asset User Profile Access)',
+      )
+      return { error: subcode ? `${reason} (subcode ${subcode})` : reason }
     }
     return { name: data.name, profilePic: data.profile_pic }
   } catch (error) {
-    logger.warn(error, 'Failed to fetch customer profile from Graph API')
-    return {}
+    logger.warn({ err: error, psid }, 'Failed to fetch customer profile from Graph API')
+    return { error: 'Failed to reach the Graph API' }
   }
 }
 
@@ -424,10 +431,12 @@ export const interactionService = {
     const profile = await fetchUserProfile(conn.accessToken, conv.id)
     const profileFetched = Boolean(profile.name || profile.profilePic)
     if (!profileFetched) {
+      // Pass the real Graph reason through so the UI shows WHY this PSID won't resolve
+      // (privacy, PSID not visible to this Page token, not opted in, etc.).
       return {
         conversation: conv,
         profileFetched: false,
-        error: 'Graph API returned no profile (permission not granted or PSID not resolvable)',
+        error: profile.error ?? 'Graph API returned no profile for this customer',
       }
     }
 

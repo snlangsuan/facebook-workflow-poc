@@ -40,14 +40,18 @@ export const connectionService = {
     }
     await connectionRepository.delete(userId, pageId)
 
-    // Clean up the inbox data tied to the removed connection so stale conversations
-    // don't linger. Page-scoped delete removes just that page; a full disconnect wipes all.
+    // Clean up ALL cached page-scoped data tied to the removed connection so nothing stale
+    // (conversations, feed posts) references a page whose token is gone. Page-scoped delete
+    // removes just that page; a full disconnect wipes everything including dedup markers.
     if (pageId) {
-      const removed = await dbService.deleteConversationsByPageId(pageId)
-      logger.info({ pageId, removed }, '🧹 Cleared conversations for removed page')
+      const [conversations, posts] = await Promise.all([
+        dbService.deleteConversationsByPageId(pageId),
+        dbService.deletePostsByPageId(pageId),
+      ])
+      logger.info({ pageId, conversations, posts }, '🧹 Cleared cached data for removed page')
     } else {
-      await dbService.clearConversations()
-      logger.info({ userId }, '🧹 Cleared all conversations on full disconnect')
+      await Promise.all([dbService.clearConversations(), dbService.clearPosts(), dbService.clearProcessedEvents()])
+      logger.info({ userId }, '🧹 Cleared all cached data on full disconnect')
     }
   },
 

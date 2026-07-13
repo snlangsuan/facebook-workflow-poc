@@ -134,6 +134,27 @@ function mergeIncomingComment(existing: IComment | undefined, inc: IIncomingComm
   }
 }
 
+/**
+ * Remove every entry under a top-level RTDB bucket whose `pageId` matches, in one atomic
+ * update. Shared by the conversation/post cleanup that runs when a page is disconnected so
+ * no stale page-scoped data lingers. Returns the number of entries removed.
+ */
+async function removeBucketEntriesByPageId(bucket: 'conversations' | 'posts', pageId: string): Promise<number> {
+  const snapshot = await rtdb.ref(bucket).once('value')
+  const all = (snapshot.val() ?? {}) as Record<string, { pageId?: string }>
+  const updates: Record<string, null> = {}
+  for (const [key, entry] of Object.entries(all)) {
+    if (entry?.pageId === pageId) {
+      updates[key] = null
+    }
+  }
+  const count = Object.keys(updates).length
+  if (count > 0) {
+    await rtdb.ref(bucket).update(updates)
+  }
+  return count
+}
+
 export const dbService = {
   getConnections: async (): Promise<IFbPageConnection[]> => {
     const snapshot = await rtdb.ref('connections').once('value')
@@ -533,22 +554,23 @@ export const dbService = {
     await rtdb.ref('conversations').remove()
   },
 
+  clearPosts: async (): Promise<void> => {
+    await rtdb.ref('posts').remove()
+  },
+
   // Remove only the conversations tagged to a given page (used when a page is disconnected
   // so its inbox data is cleaned up too). Returns the number of conversations removed.
   deleteConversationsByPageId: async (pageId: string): Promise<number> => {
-    const snapshot = await rtdb.ref('conversations').once('value')
-    const all = (snapshot.val() ?? {}) as Record<string, IConversation>
-    const updates: Record<string, null> = {}
-    for (const [key, conv] of Object.entries(all)) {
-      if (conv?.pageId === pageId) {
-        updates[key] = null
-      }
-    }
-    const count = Object.keys(updates).length
-    if (count > 0) {
-      await rtdb.ref('conversations').update(updates)
-    }
-    return count
+    return removeBucketEntriesByPageId('conversations', pageId)
+  },
+
+  // Remove only the feed posts tagged to a given page. Returns the number removed.
+  deletePostsByPageId: async (pageId: string): Promise<number> => {
+    return removeBucketEntriesByPageId('posts', pageId)
+  },
+
+  clearProcessedEvents: async (): Promise<void> => {
+    await rtdb.ref('processed_events').remove()
   },
 
   resetMockData: async (): Promise<void> => {
