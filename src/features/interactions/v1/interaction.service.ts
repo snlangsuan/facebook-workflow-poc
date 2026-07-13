@@ -192,6 +192,12 @@ async function fetchUserProfile(
   pageAccessToken: string,
   psid: string,
 ): Promise<{ name?: string; profilePic?: string }> {
+  // Log the exact endpoint (token redacted) so the profile fetch is visible in the server
+  // logs / terminal — useful evidence when demoing this permission for App Review.
+  logger.info(
+    { endpoint: `${GRAPH}/${psid}?fields=name,profile_pic` },
+    '🔎 [PROFILE] calling User Profile API (Business Asset User Profile Access)',
+  )
   try {
     const res = await fetch(`${GRAPH}/${psid}?fields=name,profile_pic&access_token=${pageAccessToken}`)
     const data = (await res.json()) as {
@@ -315,6 +321,50 @@ export const interactionService = {
   },
 
   /**
+   * Manually re-resolve a conversation's customer profile (name + photo) from the Graph API
+   * via Business Asset User Profile Access. The conversation id IS the customer's PSID, so we
+   * fetch against it with the connected Page token. Drives the "Sync Profile" button in the
+   * inbox — useful to demonstrate the permission on demand for App Review.
+   */
+  async syncConversationProfile(
+    id: string,
+  ): Promise<{ conversation: IConversation | null; profileFetched: boolean; error?: string }> {
+    const conv = await interactionRepository.getConversation(id)
+    if (!conv) {
+      return { conversation: null, profileFetched: false, error: 'Conversation not found' }
+    }
+    const conn = await resolveConnection(conv.pageId)
+    if (!conn?.accessToken) {
+      return { conversation: conv, profileFetched: false, error: 'No connected Page token available' }
+    }
+
+    // conv.id === PSID of the customer who messaged the Page.
+    const profile = await fetchUserProfile(conn.accessToken, conv.id)
+    const profileFetched = Boolean(profile.name || profile.profilePic)
+    if (!profileFetched) {
+      return {
+        conversation: conv,
+        profileFetched: false,
+        error: 'Graph API returned no profile (permission not granted or PSID not resolvable)',
+      }
+    }
+
+    logger.info(
+      { psid: conv.id, resolvedName: profile.name, hasPhoto: Boolean(profile.profilePic) },
+      '👤 [PROFILE] resolved customer identity via Business Asset User Profile Access (manual sync)',
+    )
+    const updated =
+      (await dbService.updateConversationProfile(
+        conv.id,
+        profile.name ?? conv.name,
+        profile.profilePic,
+        true,
+      )) ?? conv
+    sseBroker.broadcast('conversation_updated', updated)
+    return { conversation: updated, profileFetched: true }
+  },
+
+  /**
    * Flow 6: store the incoming message, then auto-generate a contextual Gemini reply
    * (persona + recent conversation history) and send it back via the Messenger Send API.
    * On any failure the conversation is flagged `failed` for manual admin takeover.
@@ -326,6 +376,7 @@ export const interactionService = {
     // from their PSID so the inbox shows who is messaging instead of a raw id.
     let displayName = payload.senderName
     let avatar: string | undefined
+    let profileFetched = false
     if (conn?.accessToken) {
       const profile = await fetchUserProfile(conn.accessToken, payload.senderId)
       if (profile.name) {
@@ -333,6 +384,13 @@ export const interactionService = {
       }
       if (profile.profilePic) {
         avatar = profile.profilePic
+      }
+      profileFetched = Boolean(profile.name || profile.profilePic)
+      if (profileFetched) {
+        logger.info(
+          { psid: payload.senderId, resolvedName: profile.name, hasPhoto: Boolean(profile.profilePic) },
+          '👤 [PROFILE] resolved customer identity via Business Asset User Profile Access',
+        )
       }
     }
 
@@ -344,9 +402,11 @@ export const interactionService = {
       payload.text,
       { pageId: payload.pageId },
     )
-    // Backfill the resolved identity (also covers a conversation seeded before we had a token).
-    if (avatar || displayName !== payload.senderName) {
-      conv = (await dbService.updateConversationProfile(payload.senderId, displayName, avatar)) ?? conv
+    // Persist the resolved identity + mark it as fetched (covers a conversation seeded
+    // before we had a token, and drives the "profile fetched" badge in the inbox UI).
+    if (profileFetched || displayName !== payload.senderName) {
+      conv =
+        (await dbService.updateConversationProfile(payload.senderId, displayName, avatar, profileFetched)) ?? conv
     }
     sseBroker.broadcast('conversation_updated', conv)
 

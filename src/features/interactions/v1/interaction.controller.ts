@@ -209,6 +209,26 @@ export const interactionController = {
     return c.json(conv)
   },
 
+  syncProfile: async <
+    E extends Env,
+    P extends string,
+    I extends Input & ParamInputSchema<TConversationParamPayload>,
+  >(
+    c: Context<E, P, I>,
+  ) => {
+    const { id } = c.req.valid('param')
+    const result = await interactionService.syncConversationProfile(id)
+    if (!result.conversation) {
+      return c.json({ success: false, error: result.error ?? 'Conversation not found' }, 404)
+    }
+    return c.json({
+      success: result.profileFetched,
+      profileFetched: result.profileFetched,
+      conversation: result.conversation,
+      error: result.error,
+    })
+  },
+
   replyToMessage: async <E extends Env, P extends string, I extends Input & JsonInputSchema<TMessageReplyPayload>>(
     c: Context<E, P, I>,
   ) => {

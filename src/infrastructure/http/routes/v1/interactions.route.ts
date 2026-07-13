@@ -9,6 +9,7 @@ import {
   sseEventsStreamSpec,
   listConversationsSpec,
   getConversationSpec,
+  syncProfileSpec,
   replyToMessageSpec,
   listPostsSpec,
   getPostSpec,
@@ -58,6 +59,14 @@ interactionsRouter.get(
   authMiddleware(),
   zValidator('param', conversationParamPayloadSchema),
   interactionController.getConversation,
+)
+
+interactionsRouter.post(
+  '/conversations/:id/sync-profile',
+  syncProfileSpec,
+  authMiddleware(),
+  zValidator('param', conversationParamPayloadSchema),
+  interactionController.syncProfile,
 )
 
 interactionsRouter.post(

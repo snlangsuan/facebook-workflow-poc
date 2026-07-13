@@ -106,6 +106,19 @@ export const getConversationSpec = describeRoute({
   },
 })
 
+export const syncProfileSpec = describeRoute({
+  tags: ['Conversations'],
+  summary: "Re-fetch a customer's profile via Business Asset User Profile Access",
+  responses: {
+    200: {
+      description: 'Profile sync attempted (see profileFetched flag)',
+    },
+    404: {
+      description: 'Conversation not found',
+    },
+  },
+})
+
 export const replyToMessageSpec = describeRoute({
   tags: ['Conversations'],
   summary: 'Send reply message back to user',

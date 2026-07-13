@@ -51,6 +51,10 @@ export interface IConversation {
   pageId?: string
   autoReplyStatus?: TAutoReplyStatus
   autoReplyError?: string
+  // Set when the customer's name/photo were resolved from the Graph API via
+  // Business Asset User Profile Access (used to surface the fetch in the inbox UI).
+  profileFetched?: boolean
+  profileFetchedAt?: string
 }
 
 export interface IComment {
@@ -281,6 +285,7 @@ export const dbService = {
     convId: string,
     name: string,
     avatar?: string,
+    fetched?: boolean,
   ): Promise<IConversation | undefined> => {
     const ref = rtdb.ref(`conversations/${convId}`)
     const conv = (await ref.once('value')).val() as IConversation | null
@@ -290,6 +295,10 @@ export const dbService = {
     conv.name = name
     if (avatar) {
       conv.avatar = avatar
+    }
+    if (fetched) {
+      conv.profileFetched = true
+      conv.profileFetchedAt = formatToIso()
     }
     await ref.set(conv)
     return conv
