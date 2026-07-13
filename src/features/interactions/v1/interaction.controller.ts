@@ -17,6 +17,7 @@ import type {
   TPostParamPayload,
   TCommentReplyPayload,
   TImportPostPayload,
+  TImportInboxPayload,
   THideCommentPayload,
   TLikeCommentPayload,
   TDeleteCommentPayload,
@@ -207,6 +208,14 @@ export const interactionController = {
       return c.json({ success: false, error: 'Conversation not found' }, 404)
     }
     return c.json(conv)
+  },
+
+  importInbox: async <E extends Env, P extends string, I extends Input & JsonInputSchema<TImportInboxPayload>>(
+    c: Context<E, P, I>,
+  ) => {
+    const { pageId } = c.req.valid('json')
+    const result = await interactionService.importConversationsFromPage(pageId)
+    return c.json(result)
   },
 
   syncProfile: async <

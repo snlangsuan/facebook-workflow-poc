@@ -365,6 +365,74 @@ export const interactionService = {
   },
 
   /**
+   * Pull existing Messenger threads for the connected Page straight from the Graph API
+   * (`GET /{pageId}/conversations`) using the Page token — NO webhook required. Seeds each
+   * thread's customer as a conversation (id = PSID) so it appears in the inbox and can then
+   * be enriched with the real name + photo via the "Sync Profile" button. This lets the app
+   * demonstrate Business Asset User Profile Access on any environment even when the webhook
+   * callback URL is bound to production.
+   */
+  async importConversationsFromPage(
+    pageId?: string,
+  ): Promise<{ imported: number; conversations: IConversation[]; error?: string }> {
+    const conn = await resolveConnection(pageId)
+    if (!conn?.accessToken) {
+      return { imported: 0, conversations: [], error: 'No connected Page token available' }
+    }
+
+    const url = `${GRAPH}/${conn.id}/conversations?platform=messenger&fields=participants,snippet,updated_time&limit=25&access_token=${conn.accessToken}`
+    logger.info({ endpoint: `${GRAPH}/${conn.id}/conversations?fields=participants,snippet,updated_time` }, '📥 [INBOX] importing Page conversations from Graph API')
+
+    try {
+      const res = await fetch(url)
+      const data = (await res.json()) as {
+        error?: { message?: string }
+        data?: Array<{
+          snippet?: string
+          participants?: { data?: Array<{ id?: string; name?: string }> }
+        }>
+      }
+      if (!res.ok || data.error) {
+        logger.warn(data.error ?? data, 'Could not import Page conversations')
+        return { imported: 0, conversations: [], error: data.error?.message ?? 'Graph API error' }
+      }
+
+      const conversations: IConversation[] = []
+      for (const thread of data.data ?? []) {
+        // participants includes the Page itself (id === pageId) and the customer(s).
+        const customer = thread.participants?.data?.find((p) => p.id && p.id !== conn.id)
+        if (!customer?.id) {
+          continue
+        }
+        // Skip if we already have this conversation so repeated imports don't stack messages.
+        const existing = await interactionRepository.getConversation(customer.id)
+        if (existing) {
+          conversations.push(existing)
+          continue
+        }
+        // Seed with a placeholder name (matches the webhook path) so the real name + photo
+        // resolved later via Business Asset User Profile Access is a clear before/after.
+        const conv = await interactionRepository.addMessage(
+          customer.id,
+          `Customer ${customer.id}`,
+          customer.id,
+          `Customer ${customer.id}`,
+          thread.snippet || '(no message preview)',
+          { pageId: conn.id },
+        )
+        sseBroker.broadcast('conversation_updated', conv)
+        conversations.push(conv)
+      }
+
+      logger.info({ imported: conversations.length, pageId: conn.id }, '📥 [INBOX] Page conversations imported')
+      return { imported: conversations.length, conversations }
+    } catch (error) {
+      logger.warn(error, 'Failed to import Page conversations from Graph API')
+      return { imported: 0, conversations: [], error: 'Failed to reach Graph API' }
+    }
+  },
+
+  /**
    * Flow 6: store the incoming message, then auto-generate a contextual Gemini reply
    * (persona + recent conversation history) and send it back via the Messenger Send API.
    * On any failure the conversation is flagged `failed` for manual admin takeover.

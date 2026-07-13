@@ -243,6 +243,10 @@
       <div class="p-4 border-b border-white/[0.07] flex flex-col gap-3">
         <div class="flex items-center justify-between gap-2">
           <h2 class="text-base font-semibold text-slate-100" id="listTitle">Conversations</h2>
+          <button id="loadInboxBtn" onclick="loadConversationsFromPage()" title="Pull existing Messenger threads for this Page from the Graph API (no webhook required)" class="hidden items-center gap-1.5 h-8 px-3 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/25 active:scale-[0.98] rounded-md text-xs font-medium text-cyan-300 transition-colors">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Load from Page
+          </button>
           <button id="addPostBtn" onclick="openAddPostDialog()" class="hidden h-8 px-3 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] rounded-md text-xs font-medium text-white transition-colors">+ Add post</button>
         </div>
         <div class="relative">
@@ -884,6 +888,11 @@
       const pageLabel = connectedPage ? connectedPage.name : '';
       // "+ Add post" only makes sense in the Feed view of a connected page.
       document.getElementById('addPostBtn').classList.toggle('hidden', !(tab === 'post' && connectedPage));
+      // "Load from Page" pulls Messenger threads via the Graph API — Inbox view of a connected page.
+      const showLoad = tab === 'inbox' && !!connectedPage;
+      const loadBtn = document.getElementById('loadInboxBtn');
+      loadBtn.classList.toggle('hidden', !showLoad);
+      loadBtn.classList.toggle('inline-flex', showLoad);
       if (tab === 'inbox') {
         document.getElementById('listTitle').innerText = pageLabel ? `${pageLabel} · Inbox` : 'Conversations';
         fetchConversationsList();
@@ -1060,6 +1069,32 @@
           fetchConversationsList(false);
         } catch (err) {
           showAlertDialog('Send Failed', err.message);
+        }
+      });
+    }
+
+    // Pull existing Messenger threads for the connected Page from the Graph API (no webhook).
+    // Seeds them into the inbox so each can be enriched via "Sync Profile".
+    async function loadConversationsFromPage() {
+      if (!connectedPage) return;
+      const btn = document.getElementById('loadInboxBtn');
+      await runWithLoading(btn, async () => {
+        try {
+          const res = await apiFetch('/api/v1/interactions/conversations/import-from-page', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pageId: connectedPage.id })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Could not load conversations.');
+          await fetchConversationsList(false);
+          if (data.error) {
+            showAlertDialog('Load Warning', data.error);
+          } else {
+            showAlertDialog('Conversations Loaded', `Imported ${data.imported} conversation(s) from the Page. Open one and press "Sync Profile" to fetch the customer's name & photo.`);
+          }
+        } catch (err) {
+          showAlertDialog('Load Failed', err.message);
         }
       });
     }

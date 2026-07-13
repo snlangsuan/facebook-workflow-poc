@@ -106,6 +106,16 @@ export const getConversationSpec = describeRoute({
   },
 })
 
+export const importInboxSpec = describeRoute({
+  tags: ['Conversations'],
+  summary: 'Import existing Messenger threads for the Page from the Graph API (no webhook needed)',
+  responses: {
+    200: {
+      description: 'Conversations imported',
+    },
+  },
+})
+
 export const syncProfileSpec = describeRoute({
   tags: ['Conversations'],
   summary: "Re-fetch a customer's profile via Business Asset User Profile Access",

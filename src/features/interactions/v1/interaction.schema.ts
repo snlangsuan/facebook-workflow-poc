@@ -63,6 +63,10 @@ export const importPostPayloadSchema = z.object({
   pageId: z.string().optional(),
 })
 
+export const importInboxPayloadSchema = z.object({
+  pageId: z.string().optional(),
+})
+
 export const conversationParamPayloadSchema = z.object({
   id: z.string().min(1),
 })

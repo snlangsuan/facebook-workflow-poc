@@ -9,6 +9,7 @@ import {
   sseEventsStreamSpec,
   listConversationsSpec,
   getConversationSpec,
+  importInboxSpec,
   syncProfileSpec,
   replyToMessageSpec,
   listPostsSpec,
@@ -28,6 +29,7 @@ import {
   postParamPayloadSchema,
   commentReplyPayloadSchema,
   importPostPayloadSchema,
+  importInboxPayloadSchema,
   hideCommentPayloadSchema,
   likeCommentPayloadSchema,
   deleteCommentPayloadSchema,
@@ -59,6 +61,14 @@ interactionsRouter.get(
   authMiddleware(),
   zValidator('param', conversationParamPayloadSchema),
   interactionController.getConversation,
+)
+
+interactionsRouter.post(
+  '/conversations/import-from-page',
+  importInboxSpec,
+  authMiddleware(),
+  zValidator('json', importInboxPayloadSchema),
+  interactionController.importInbox,
 )
 
 interactionsRouter.post(
