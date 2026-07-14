@@ -33,7 +33,7 @@
 - [ ] เปิด **terminal ที่รันเซิร์ฟเวอร์** ให้เห็น log — จะใช้โชว์เป็นหลักฐานการเรียก API
 - [ ] ล้าง/เตรียม conversation ให้เริ่มสะอาด เพื่อให้เห็นการเปลี่ยนจาก "ยังไม่ fetch" → "fetch แล้ว"
 
-> **หมายเหตุ scope:** "Business Asset User Profile Access" เป็น **feature ระดับแอพ (ขอผ่าน App Review)** ไม่ใช่ OAuth scope ที่ขอตอน login — ตอน login แอพขอ scope เหล่านี้: `pages_show_list, pages_messaging, pages_read_engagement, pages_manage_metadata, pages_manage_engagement` ([index.html](../src/public/index.html)) ซึ่งเป็นสิ่งที่ควรพูดถึงในวิดีโอเพื่อให้ reviewer เข้าใจบริบท
+> **หมายเหตุ scope:** "Business Asset User Profile Access" เป็น **feature ระดับแอพ (ขอผ่าน App Review)** ไม่ใช่ OAuth scope ที่ขอตอน login — ตอน login แอพขอ scope เหล่านี้: `pages_show_list, pages_messaging, pages_read_engagement, pages_read_user_content, pages_manage_metadata, pages_manage_engagement` ([index.html](../src/public/index.html)) ซึ่งเป็นสิ่งที่ควรพูดถึงในวิดีโอเพื่อให้ reviewer เข้าใจบริบท
 
 ---
 
