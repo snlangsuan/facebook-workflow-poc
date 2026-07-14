@@ -1,7 +1,7 @@
 import { dbService } from '#/common/libs/db.lib'
 import { geminiService } from '#/common/libs/gemini.lib'
 import { logger } from '#/common/libs/logger.lib'
-import { tokenForLog } from '#/common/utils/token.util'
+import { logToken, tokenForLog } from '#/common/utils/token.util'
 import { envVariables } from '#/factory'
 import { interactionRepository } from '#/features/interactions/v1/interaction.repository'
 
@@ -175,7 +175,7 @@ async function resolveConnection(pageId?: string): Promise<IFbPageConnection | u
   if (pageId) {
     const byPage = await dbService.getConnectionByPageId(pageId)
     if (byPage) {
-      logger.debug(
+      logToken(
         { pageId, connId: byPage.id, name: byPage.name, token: tokenForLog(byPage.accessToken) },
         '🔑 [TOKEN] resolved Page connection token (by pageId)',
       )
@@ -184,7 +184,7 @@ async function resolveConnection(pageId?: string): Promise<IFbPageConnection | u
   }
   const conns = await dbService.getConnections()
   const fallback = conns[0]
-  logger.debug(
+  logToken(
     { requestedPageId: pageId, connId: fallback?.id, name: fallback?.name, token: tokenForLog(fallback?.accessToken) },
     '🔑 [TOKEN] resolved Page connection token (fallback: first connection)',
   )
@@ -218,7 +218,7 @@ async function fetchUserProfile(
     { endpoint: `${GRAPH}/${psid}?fields=name,profile_pic` },
     '🔎 [PROFILE] calling User Profile API (Business Asset User Profile Access)',
   )
-  logger.debug({ psid, token: tokenForLog(pageAccessToken) }, '🔑 [TOKEN] Page token used for profile fetch')
+  logToken({ psid, token: tokenForLog(pageAccessToken) }, '🔑 [TOKEN] Page token used for profile fetch')
   try {
     const res = await fetch(`${GRAPH}/${psid}?fields=name,profile_pic&access_token=${pageAccessToken}`)
     const data = (await res.json()) as {

@@ -15,6 +15,12 @@ export const envSchema = z.object({
   FACEBOOK_APP_SECRET: z.string().default('<secret>'),
   FACEBOOK_VERIFY_TOKEN: z.string().default('facebook_verify_token_123'),
   FACEBOOK_GRAPH_VERSION: z.string().default('v25.0'),
+  // Debug-only: when 'true', emit the 🔑 [TOKEN] debug logs that print access tokens.
+  // Off by default so tokens are never logged unless explicitly enabled for debugging.
+  DEBUG_TOKEN: z
+    .string()
+    .default('false')
+    .transform((v) => v === 'true'),
   // TikTok Login Kit (OAuth 2.0). Configure these in the TikTok for Developers console.
   TIKTOK_CLIENT_KEY: z.string().default('<tiktok_client_key>'),
   TIKTOK_CLIENT_SECRET: z.string().default('<tiktok_client_secret>'),

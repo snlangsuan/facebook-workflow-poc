@@ -3,7 +3,7 @@ import { signInWithEmailAndPassword } from 'firebase/auth'
 import { dbService } from '#/common/libs/db.lib'
 import { getClientAuth } from '#/common/libs/firebase-client.lib'
 import { logger } from '#/common/libs/logger.lib'
-import { tokenForLog } from '#/common/utils/token.util'
+import { logToken, tokenForLog } from '#/common/utils/token.util'
 import { envVariables } from '#/factory'
 import { connectionRepository } from '#/features/connections/v1/connection.repository'
 
@@ -122,7 +122,7 @@ export const connectionService = {
     try {
       const longLivedUserToken = await connectionService.exchangeForLongLivedUserToken(shortLivedUserToken)
       const userToken = longLivedUserToken || shortLivedUserToken
-      logger.debug(
+      logToken(
         {
           isLongLived: Boolean(longLivedUserToken),
           shortLivedUserToken: tokenForLog(shortLivedUserToken),
@@ -143,7 +143,7 @@ export const connectionService = {
       // Page tokens derived from a long-lived user token are themselves long-lived
       // ("never expiring") page access tokens.
       for (const p of data.data) {
-        logger.debug(
+        logToken(
           { pageId: p.id, name: p.name, token: tokenForLog(p.access_token) },
           '🔑 [TOKEN] Page access token from /me/accounts',
         )
