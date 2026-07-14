@@ -1369,6 +1369,7 @@
         : '';
 
       container.innerHTML = `
+        <div class="flex-1 overflow-y-auto flex flex-col">
         <div class="p-6 border-b border-slate-800/85 bg-slate-950/5">
           <div class="flex items-center gap-3.5 mb-4">
             <img src="${connectedPage ? pageAvatarUrl(connectedPage.id) : ''}" onerror="this.onerror=null;this.src='https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(connectedPage ? connectedPage.name : 'FB')}'" class="w-9 h-9 rounded-lg object-cover bg-slate-800">
@@ -1387,7 +1388,7 @@
           ${imgTag}
         </div>
         
-        <div class="flex-1 overflow-y-auto p-6 border-t border-slate-800/85 flex flex-col gap-4">
+        <div class="p-6 border-t border-slate-800/85 flex flex-col gap-4">
           ${failedBanner}
           <div class="flex flex-col gap-1.5">
             <div class="flex items-center gap-2 flex-wrap">
@@ -1401,7 +1402,8 @@
           </div>
           <div class="flex flex-col gap-3">${commentsHtml}</div>
         </div>
-        
+        </div>
+
         <div class="px-6 py-5 border-t border-slate-800/85 flex gap-3 items-center bg-slate-950/10">
           <input type="text" id="commentComposerInput" class="flex-1 h-11 bg-black/25 border border-slate-800/80 rounded-xl px-4 text-sm focus:outline-none focus:border-indigo-500/50 transition-all" placeholder="Write a comment on this post…" onkeydown="handleCommentComposeKey(event)">
           <button id="commentSendBtn" class="w-11 h-11 bg-indigo-600 hover:bg-indigo-500 active:scale-95 rounded-xl flex items-center justify-center transition-all" onclick="sendReplyComment()">
