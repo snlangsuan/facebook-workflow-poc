@@ -279,6 +279,7 @@
 
   <script>
     const BASE = '/demo'; // path prefix the app is served under
+    const COMMENT_BATCH = 8; // how many comment threads to reveal per "load more" / scroll
     let activeTab = 'inbox';
     let currentUserId = '';
     let connectedPage = null;
@@ -1346,15 +1347,25 @@
       allComments.filter((c) => c.parentId).forEach((c) => {
         (repliesByParent[c.parentId] = repliesByParent[c.parentId] || []).push(c);
       });
-      let commentsHtml = '';
-      topLevel.forEach((c) => {
-        commentsHtml += renderComment(c, false);
-        (repliesByParent[c.id] || []).sort(byTimeAsc).forEach((r) => { commentsHtml += renderComment(r, true); });
+      // Build one HTML block per top-level comment thread (comment + its replies) so we can
+      // reveal them in batches as the admin scrolls — like Facebook's "view more comments".
+      const commentBlocks = topLevel.map((c) => {
+        let block = renderComment(c, false);
+        (repliesByParent[c.id] || []).sort(byTimeAsc).forEach((r) => { block += renderComment(r, true); });
+        return block;
       });
       // Replies whose parent isn't in this post (e.g. AI replies stored with unknown parent id) render flat.
       allComments
         .filter((c) => c.parentId && !topLevel.some((t) => t.id === c.parentId))
-        .forEach((c) => { commentsHtml += renderComment(c, true); });
+        .forEach((c) => { commentBlocks.push(renderComment(c, true)); });
+
+      const shownCount = Math.min(COMMENT_BATCH, commentBlocks.length);
+      const commentsHtml = commentBlocks.slice(0, shownCount).join('');
+      const moreCount = commentBlocks.length - shownCount;
+      // Stash the full render plan so showMoreComments() can append the next batch without
+      // re-rendering the whole post (which would reset the scroll position).
+      window.__commentBlocks = commentBlocks;
+      window.__commentsShown = shownCount;
 
       const imgTag = post.imageUrl ? `<img src="${post.imageUrl}" class="w-full max-h-[260px] rounded-xl object-cover border border-slate-800/60 mt-3">` : '';
       const dateStr = new Date(post.createdAt).toLocaleString();
@@ -1369,7 +1380,7 @@
         : '';
 
       container.innerHTML = `
-        <div class="flex-1 overflow-y-auto flex flex-col">
+        <div id="postScrollArea" class="flex-1 overflow-y-auto flex flex-col">
         <div class="p-6 border-b border-slate-800/85 bg-slate-950/5">
           <div class="flex items-center gap-3.5 mb-4">
             <img src="${connectedPage ? pageAvatarUrl(connectedPage.id) : ''}" onerror="this.onerror=null;this.src='https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(connectedPage ? connectedPage.name : 'FB')}'" class="w-9 h-9 rounded-lg object-cover bg-slate-800">
@@ -1400,7 +1411,8 @@
               <span>Comments written by users on your Page, read live from the Facebook Graph API via <span class="text-slate-400 font-medium">pages_read_user_content</span>. The app displays them so admins can read and moderate visitor feedback.</span>
             </p>
           </div>
-          <div class="flex flex-col gap-3">${commentsHtml}</div>
+          <div id="commentsList" class="flex flex-col gap-3">${commentsHtml}</div>
+          <button id="loadMoreCommentsBtn" onclick="showMoreComments()" class="${moreCount > 0 ? '' : 'hidden'} self-start text-xs font-semibold text-indigo-400 hover:text-indigo-300 mt-1">View ${moreCount} more comment${moreCount === 1 ? '' : 's'}</button>
         </div>
         </div>
 
@@ -1416,6 +1428,38 @@
       `;
       
       document.getElementById('workspaceDetail').appendChild(container);
+
+      // Auto-load more comments as the admin scrolls near the bottom (Facebook-style),
+      // in addition to the explicit "View more comments" button.
+      const scrollArea = document.getElementById('postScrollArea');
+      if (scrollArea) {
+        scrollArea.onscroll = () => {
+          if (scrollArea.scrollTop + scrollArea.clientHeight >= scrollArea.scrollHeight - 120) {
+            showMoreComments();
+          }
+        };
+      }
+    }
+
+    // Reveal the next batch of comment threads by appending pre-built HTML — no full re-render,
+    // so the current scroll position is preserved. No-op once everything is shown.
+    function showMoreComments() {
+      const blocks = window.__commentBlocks || [];
+      const shown = window.__commentsShown || 0;
+      if (shown >= blocks.length) return;
+      const next = blocks.slice(shown, shown + COMMENT_BATCH);
+      const list = document.getElementById('commentsList');
+      if (list) list.insertAdjacentHTML('beforeend', next.join(''));
+      window.__commentsShown = shown + next.length;
+      const remaining = blocks.length - window.__commentsShown;
+      const btn = document.getElementById('loadMoreCommentsBtn');
+      if (btn) {
+        if (remaining <= 0) {
+          btn.classList.add('hidden');
+        } else {
+          btn.textContent = `View ${remaining} more comment${remaining === 1 ? '' : 's'}`;
+        }
+      }
     }
 
     function handleCommentComposeKey(e) {
