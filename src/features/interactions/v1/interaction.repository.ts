@@ -48,6 +48,7 @@ export const interactionRepository = {
     return await dbService.addComment(payload.postId, payload.senderName, payload.text, {
       id: payload.commentId,
       parentId: payload.parentId ?? null,
+      identityWithheld: payload.identityWithheld,
     })
   },
 }

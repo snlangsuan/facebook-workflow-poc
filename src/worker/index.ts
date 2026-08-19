@@ -1,7 +1,7 @@
 import { dbService } from '#/common/libs/db.lib'
 import { rtdb } from '#/common/libs/firebase.lib'
 import { logger } from '#/common/libs/logger.lib'
-import { interactionService } from '#/features/interactions/v1/interaction.service'
+import { interactionService, WITHHELD_COMMENTER_NAME } from '#/features/interactions/v1/interaction.service'
 
 interface IWebhookMessaging {
   sender?: { id: string }
@@ -72,12 +72,15 @@ async function handleChange(pageId: string | undefined, change: IWebhookChange):
       return
     }
     logger.info({ commentId: value.comment_id, postId: value.post_id }, '💬 [WORKER] processing comment')
+    // Graph withholds `from` for commenters with no role on the app until Business Asset
+    // User Profile Access is approved — flag it so the UI explains the missing name.
     await interactionService.receiveCustomerComment({
       postId: value.post_id || 'post_1',
-      senderName: value.from?.name || 'Anonymous',
+      senderName: value.from?.name || WITHHELD_COMMENTER_NAME,
       text: value.message,
       commentId: value.comment_id,
       pageId,
+      identityWithheld: !value.from?.name,
     })
     return
   }

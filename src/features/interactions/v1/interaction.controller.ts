@@ -75,6 +75,14 @@ function summarizeWebhook(body: unknown): Record<string, unknown> {
   return { object: b.object, entries: b.entry.length, events }
 }
 
+/**
+ * The Firebase uid injected by `authMiddleware`. Every page-scoped read/write is filtered
+ * through it so one workspace can never see or act on another's Pages, conversations or posts.
+ */
+function currentUserId(c: { get: (key: string) => unknown }): string {
+  return (c.get('user_id') as string | undefined) ?? ''
+}
+
 export const interactionController = {
   verifyWebhook: async <E extends Env, P extends string, I extends Input & QueryInputSchema<TWebhookVerifyQuery>>(
     c: Context<E, P, I>,
@@ -121,7 +129,12 @@ export const interactionController = {
 
     if (!sig.valid) {
       logger.warn(
-        { reason: sig.reason, expectedPrefix: sig.expectedPrefix, receivedPrefix: sig.receivedPrefix, preview: rawBody.slice(0, 400) },
+        {
+          reason: sig.reason,
+          expectedPrefix: sig.expectedPrefix,
+          receivedPrefix: sig.receivedPrefix,
+          preview: rawBody.slice(0, 400),
+        },
         '❌ [WEBHOOK] signature INVALID — rejecting (401)',
       )
       return c.json({ success: false, error: 'Invalid signature' }, 401)
@@ -161,7 +174,14 @@ export const interactionController = {
       // read-timeout fires, and hint a client reconnect delay.
       await stream.writeSSE({ event: 'connected', data: 'ok', retry: 5000 })
 
-      const unsubscribe = sseBroker.subscribe((data: string) => {
+      // Forward only events for Pages this viewer has connected — the same rule the REST
+      // reads apply, so the live stream can't hand one workspace another's activity.
+      let ownedPageIds = await interactionService.listOwnedPageIds(currentUserId(c))
+
+      const unsubscribe = sseBroker.subscribe((data: string, pageId?: string) => {
+        if (!pageId || !ownedPageIds.has(pageId)) {
+          return
+        }
         void stream.writeSSE({
           data,
           event: 'message',
@@ -169,8 +189,17 @@ export const interactionController = {
         })
       })
 
-      // Heartbeat well under common proxy idle timeouts (often 30–60s).
+      // Heartbeat well under common proxy idle timeouts (often 30–60s). Also refreshes the
+      // owned-page set so a Page connected mid-stream starts delivering without a reconnect.
       const interval = setInterval(() => {
+        void interactionService
+          .listOwnedPageIds(currentUserId(c))
+          .then((ids) => {
+            ownedPageIds = ids
+          })
+          .catch(() => {
+            // keep the previous set; the next heartbeat retries
+          })
         void stream.writeSSE({
           data: 'ping',
           event: 'heartbeat',
@@ -191,7 +220,7 @@ export const interactionController = {
   },
 
   listConversations: async <E extends Env, P extends string, I extends Input>(c: Context<E, P, I>) => {
-    const list = await interactionService.listConversations()
+    const list = await interactionService.listConversations(currentUserId(c), c.req.query('pageId'))
     return c.json(list)
   },
 
@@ -203,7 +232,7 @@ export const interactionController = {
     c: Context<E, P, I>,
   ) => {
     const { id } = c.req.valid('param')
-    const conv = await interactionService.getConversation(id)
+    const conv = await interactionService.getConversation(currentUserId(c), id)
     if (!conv) {
       return c.json({ success: false, error: 'Conversation not found' }, 404)
     }
@@ -214,25 +243,21 @@ export const interactionController = {
     c: Context<E, P, I>,
   ) => {
     const { pageId } = c.req.valid('json')
-    const result = await interactionService.importConversationsFromPage(pageId)
+    const result = await interactionService.importConversationsFromPage(currentUserId(c), pageId)
     return c.json(result)
   },
 
   clearConversations: async <E extends Env, P extends string, I extends Input>(c: Context<E, P, I>) => {
     const pageId = c.req.query('pageId')
-    const result = await interactionService.clearConversations(pageId)
+    const result = await interactionService.clearConversations(currentUserId(c), pageId)
     return c.json({ success: true, ...result })
   },
 
-  syncProfile: async <
-    E extends Env,
-    P extends string,
-    I extends Input & ParamInputSchema<TConversationParamPayload>,
-  >(
+  syncProfile: async <E extends Env, P extends string, I extends Input & ParamInputSchema<TConversationParamPayload>>(
     c: Context<E, P, I>,
   ) => {
     const { id } = c.req.valid('param')
-    const result = await interactionService.syncConversationProfile(id)
+    const result = await interactionService.syncConversationProfile(currentUserId(c), id)
     if (!result.conversation) {
       return c.json({ success: false, error: result.error ?? 'Conversation not found' }, 404)
     }
@@ -240,6 +265,8 @@ export const interactionController = {
       success: result.profileFetched,
       profileFetched: result.profileFetched,
       conversation: result.conversation,
+      // Lets the UI distinguish "the feature is still under App Review" from a real failure.
+      pendingApproval: result.pendingApproval ?? false,
       error: result.error,
     })
   },
@@ -248,7 +275,7 @@ export const interactionController = {
     c: Context<E, P, I>,
   ) => {
     const payload = c.req.valid('json')
-    const conv = await interactionService.replyToMessage(payload)
+    const conv = await interactionService.replyToMessage(currentUserId(c), payload)
     if (!conv) {
       return c.json({ success: false, error: 'Conversation not found' }, 404)
     }
@@ -256,7 +283,7 @@ export const interactionController = {
   },
 
   listPosts: async <E extends Env, P extends string, I extends Input>(c: Context<E, P, I>) => {
-    const posts = await interactionService.listPosts()
+    const posts = await interactionService.listPosts(currentUserId(c), c.req.query('pageId'))
     return c.json(posts)
   },
 
@@ -265,7 +292,7 @@ export const interactionController = {
   ) => {
     const { input, pageId } = c.req.valid('json')
     try {
-      const post = await interactionService.importPost(input, pageId)
+      const post = await interactionService.importPost(currentUserId(c), input, pageId)
       return c.json(post)
     } catch (error) {
       const err = error as Error
@@ -277,7 +304,7 @@ export const interactionController = {
     c: Context<E, P, I>,
   ) => {
     const { id } = c.req.valid('param')
-    const post = await interactionService.getPost(id)
+    const post = await interactionService.getPost(currentUserId(c), id)
     if (!post) {
       return c.json({ success: false, error: 'Post not found' }, 404)
     }
@@ -288,7 +315,7 @@ export const interactionController = {
     c: Context<E, P, I>,
   ) => {
     const { id } = c.req.valid('param')
-    await interactionService.deletePost(id)
+    await interactionService.deletePost(currentUserId(c), id)
     return c.json(successResponseSchema.parse({ success: true }))
   },
 
@@ -297,7 +324,7 @@ export const interactionController = {
   ) => {
     const { id } = c.req.valid('param')
     try {
-      const post = await interactionService.syncPost(id)
+      const post = await interactionService.syncPost(currentUserId(c), id)
       if (!post) {
         return c.json({ success: false, error: 'Post not found' }, 404)
       }
@@ -313,7 +340,7 @@ export const interactionController = {
   ) => {
     const { postId, commentId, hidden } = c.req.valid('json')
     try {
-      const post = await interactionService.hideComment(postId, commentId, hidden)
+      const post = await interactionService.hideComment(currentUserId(c), postId, commentId, hidden)
       if (!post) {
         return c.json({ success: false, error: 'Comment not found' }, 404)
       }
@@ -329,7 +356,7 @@ export const interactionController = {
   ) => {
     const payload = c.req.valid('json')
     try {
-      const post = await interactionService.likeComment(payload)
+      const post = await interactionService.likeComment(currentUserId(c), payload)
       if (!post) {
         return c.json({ success: false, error: 'Comment not found' }, 404)
       }
@@ -345,7 +372,7 @@ export const interactionController = {
   ) => {
     const payload = c.req.valid('json')
     try {
-      const post = await interactionService.deleteComment(payload)
+      const post = await interactionService.deleteComment(currentUserId(c), payload)
       if (!post) {
         return c.json({ success: false, error: 'Comment not found' }, 404)
       }
@@ -360,7 +387,7 @@ export const interactionController = {
     c: Context<E, P, I>,
   ) => {
     const payload = c.req.valid('json')
-    const comment = await interactionService.replyToComment(payload)
+    const comment = await interactionService.replyToComment(currentUserId(c), payload)
     if (!comment) {
       return c.json({ success: false, error: 'Post not found' }, 404)
     }

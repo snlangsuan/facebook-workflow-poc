@@ -64,6 +64,13 @@ export interface IComment {
   timestamp: string
   avatarUrl?: string
   fromId?: string
+  /**
+   * True when the Graph API returned the comment but withheld its author (`from`). That is
+   * the expected response for a commenter with no role on the app while Business Asset User
+   * Profile Access is unapproved — the UI says so instead of showing a placeholder name as
+   * if it were the person's real one.
+   */
+  identityWithheld?: boolean
   parentId?: string | null
   status?: 'sent' | 'failed'
   error?: string
@@ -110,6 +117,7 @@ interface IIncomingComment {
   parentId?: string | null
   avatarUrl?: string
   fromId?: string
+  identityWithheld?: boolean
 }
 
 /** Update an existing comment's Facebook-sourced fields, or build a new one. */
@@ -121,6 +129,9 @@ function mergeIncomingComment(existing: IComment | undefined, inc: IIncomingComm
     if (inc.fromId) existing.fromId = inc.fromId
     if (inc.avatarUrl) existing.avatarUrl = inc.avatarUrl
     if (inc.timestamp) existing.timestamp = formatToIso(inc.timestamp)
+    // Re-synced each time: a comment whose author was withheld can resolve once the
+    // feature is granted, and must then stop being flagged.
+    existing.identityWithheld = Boolean(inc.identityWithheld)
     return existing
   }
   return {
@@ -131,6 +142,7 @@ function mergeIncomingComment(existing: IComment | undefined, inc: IIncomingComm
     parentId: inc.parentId ?? null,
     ...(inc.fromId ? { fromId: inc.fromId } : {}),
     ...(inc.avatarUrl ? { avatarUrl: inc.avatarUrl } : {}),
+    ...(inc.identityWithheld ? { identityWithheld: true } : {}),
   }
 }
 
@@ -387,6 +399,7 @@ export const dbService = {
       avatarUrl?: string
       timestamp?: string
       fromId?: string
+      identityWithheld?: boolean
     },
   ): Promise<IComment | null> => {
     const ref = rtdb.ref(`posts/${postId}`)
@@ -404,6 +417,7 @@ export const dbService = {
       parentId: opts?.parentId ?? null,
       ...(opts?.avatarUrl ? { avatarUrl: opts.avatarUrl } : {}),
       ...(opts?.fromId ? { fromId: opts.fromId } : {}),
+      ...(opts?.identityWithheld ? { identityWithheld: true } : {}),
       ...(opts?.status ? { status: opts.status } : {}),
       ...(opts?.error ? { error: opts.error } : {}),
     }
@@ -431,6 +445,7 @@ export const dbService = {
       parentId?: string | null
       avatarUrl?: string
       fromId?: string
+      identityWithheld?: boolean
     }>,
   ): Promise<IPost | undefined> => {
     const ref = rtdb.ref(`posts/${postId}`)

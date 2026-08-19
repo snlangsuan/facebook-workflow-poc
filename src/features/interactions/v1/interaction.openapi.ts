@@ -85,7 +85,7 @@ export const sseEventsStreamSpec = describeRoute({
 
 export const listConversationsSpec = describeRoute({
   tags: ['Conversations'],
-  summary: 'List all chat conversations',
+  summary: "List conversations for the signed-in user's connected Pages",
   responses: {
     200: {
       description: 'List of conversations retrieved',
@@ -131,7 +131,8 @@ export const syncProfileSpec = describeRoute({
   summary: "Re-fetch a customer's profile via Business Asset User Profile Access",
   responses: {
     200: {
-      description: 'Profile sync attempted (see profileFetched flag)',
+      description:
+        'Profile sync attempted. `profileFetched` reports success; `pendingApproval` is true when Graph refused because Business Asset User Profile Access is not granted yet.',
     },
     404: {
       description: 'Conversation not found',
@@ -151,7 +152,7 @@ export const replyToMessageSpec = describeRoute({
 
 export const listPostsSpec = describeRoute({
   tags: ['Posts'],
-  summary: 'List all page posts',
+  summary: "List feed posts for the signed-in user's connected Pages",
   responses: {
     200: {
       description: 'List of posts retrieved',

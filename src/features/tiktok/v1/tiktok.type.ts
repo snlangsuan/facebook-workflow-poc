@@ -4,11 +4,13 @@ import {
   tiktokCallbackQuerySchema,
   tiktokConfigResponseSchema,
   tiktokConnectionResponseSchema,
+  tiktokWebhookEventSchema,
 } from '#/features/tiktok/v1/tiktok.schema'
 
 export type TTiktokCallbackQuery = z.infer<typeof tiktokCallbackQuerySchema>
 export type TTiktokConfigResponse = z.infer<typeof tiktokConfigResponseSchema>
 export type TTiktokConnectionResponse = z.infer<typeof tiktokConnectionResponseSchema>
+export type TTiktokWebhookEvent = z.infer<typeof tiktokWebhookEventSchema>
 
 // Shape returned by POST https://open.tiktokapis.com/v2/oauth/token/
 export interface ITiktokTokenResponse {

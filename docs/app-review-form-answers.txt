@@ -1,0 +1,168 @@
+================================================================================
+APP REVIEW — PASTE-READY ANSWERS
+App: omni-channel  |  URL: https://studio.jts.co.th/demo/
+Paste each block exactly as-is into the matching field in the App Review form.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+[1] PERMISSION: pages_read_engagement
+Field: "Tell us how you're using this permission or feature"
+--------------------------------------------------------------------------------
+
+omni-channel is a business inbox that lets a Facebook Page admin read and manage everything happening on their own Page from a single screen.
+
+We use pages_read_engagement to read the content that the Page itself has published. After the Page admin logs in with Facebook and connects a Page they manage, they add one of their Page posts to the dashboard. The app calls GET /{page-post-id}?fields=message,full_picture,created_time,permalink_url with the Page access token and renders the post message, image and publish time in the Feed view of the app.
+
+Without this permission the app cannot display the Page's own post content, and the admin would have no context for the comments and messages they are moderating in the rest of the product.
+
+The data is used only to display the post inside the admin's own dashboard. We do not sell it, transfer it to third parties, or use it for advertising or profiling.
+
+The screencast demonstrates the complete Facebook Login process including the permission dialog, the Page selection step, the admin importing one of their own Page posts, and the post content (message and image) being successfully displayed inside our app.
+
+
+--------------------------------------------------------------------------------
+[2] PERMISSION: pages_read_user_content
+Field: "Tell us how you're using this permission or feature"
+--------------------------------------------------------------------------------
+
+omni-channel lets a Facebook Page admin read and moderate the content that Facebook users leave on their Page.
+
+We use pages_read_user_content to read the user-generated comments on the admin's Page posts. When a post is opened in the app we call GET /{page-post-id}/comments?fields=id,message,from,created_time,is_hidden with the Page access token and display each comment - the author, the text and the time - in the comment panel. Comments written by visitors are labelled with a "USER COMMENT" badge so the support agent can immediately tell visitor content apart from the Page's own replies. The same permission also allows the admin to delete an inappropriate visitor comment from inside the app.
+
+This is the core of the product: a support agent cannot moderate a Page without being able to read what visitors wrote on it.
+
+The comments are displayed only in the admin's own dashboard. We do not sell them, transfer them to third parties, or use them for advertising or profiling.
+
+The screencast demonstrates the complete Facebook Login process including the permission dialog, the Page selection step, a Page post being imported, the user-generated comment being successfully displayed in our app with its author and text, and the same comment on the real Facebook Page for comparison.
+
+
+--------------------------------------------------------------------------------
+[3] PERMISSION: pages_manage_engagement
+Field: "Tell us how you're using this permission or feature"
+--------------------------------------------------------------------------------
+
+omni-channel is a customer-support tool for Facebook Pages. Businesses use it so their support team can answer and moderate visitor comments without giving every agent direct access to the Facebook Page itself.
+
+We use pages_manage_engagement so the Page admin can act on the comments they see in our app, on behalf of the Page they manage:
+
+- Publish a comment: the admin writes a reply to a visitor's comment in the app and we call POST /{comment-id}/comments (or POST /{post-id}/comments) with the Page access token. The reply is published on the Page post as the Page.
+- Like a comment: the admin acknowledges a visitor comment as the Page; we call POST /{comment-id}/likes.
+- Hide or unhide a comment: the admin removes an abusive or spam comment from public view; we call POST /{comment-id} with is_hidden=true or is_hidden=false.
+- Delete a comment: the admin removes a comment entirely; we call DELETE /{comment-id}.
+
+Every action is triggered explicitly by the Page admin from the app UI, and is applied only to Pages the admin manages and has connected to the app. The app never publishes, likes, hides or deletes anything automatically.
+
+The screencast demonstrates the complete Facebook Login process including the permission dialog, the admin publishing a reply to a visitor comment from inside our app, and the newly published comment then appearing on the admin's real Facebook Page. It also shows the Like and Hide actions and their effect on the live Page.
+
+
+--------------------------------------------------------------------------------
+[4] FEATURE: Business Asset User Profile Access
+Field: "Tell us how you're using this permission or feature"
+--------------------------------------------------------------------------------
+
+omni-channel is a shared inbox that a business's support team uses to answer customers who message their Facebook Page through Messenger.
+
+Messenger conversations identify the customer only by a page-scoped ID (PSID). Without Business Asset User Profile Access our inbox can only show "Customer 27353747824317636", which makes it impossible for an agent to know who they are talking to, to match the conversation to an existing customer record, or to address the person by name.
+
+We use this feature to read the User fields of a person who has engaged with our business asset - the connected Page - by sending it a message. When a message arrives on the Page's "messages" webhook, and again whenever the admin presses "Sync Profile" on a conversation, the app calls GET /{PSID}?fields=id,name,picture{url} with the Page access token and displays the returned name and profile picture at the top of the conversation and in the conversation list, next to a badge stating that the data was fetched via Business Asset User Profile Access.
+
+We rely on the same feature in the second place a person engages with the connected Page: its posts. When the admin opens a Page post we call GET /{page-post-id}/comments?fields=id,from{name,id,picture{url}},message,created_time,parent and display each commenter's name and profile picture next to their comment, so the agent moderating the thread can tell one visitor from another and answer them by name. Both cases are the same allowed usage - reading the User fields of a person who engaged with our business asset, shown only inside the business app experience.
+
+The data is used only inside the business app experience: it is shown to the Page admin or support agent who is handling that conversation or that post. We do not sell or transfer it, we do not use it for advertising or profiling, and we do not combine it with data from other sources.
+
+The screencast demonstrates the complete Facebook Login process, a message arriving from the Page's Messenger inbox and appearing as a PSID only, the admin pressing "Sync Profile", the customer's real name and profile picture appearing in the inbox, and the server log - highlighted in red - showing the exact Graph API call and the resolved identity.
+
+
+--------------------------------------------------------------------------------
+[5] PERMISSION: pages_show_list
+Field: "Tell us how you're using this permission or feature"
+--------------------------------------------------------------------------------
+
+pages_show_list is requested as a dependency of pages_read_engagement, pages_read_user_content and pages_manage_engagement.
+
+After Facebook Login the app calls GET /me/accounts to show the person the list of Pages they manage, so they can choose which Page to connect to omni-channel. It is used only to render that Page picker and to verify that the person manages the Page they are connecting. The list is not stored beyond the Page the admin selects, is not shared with third parties, and is not used for advertising.
+
+The screencast demonstrates the complete Facebook Login process and the Pages owned by the user being successfully listed and connected to our app.
+
+
+--------------------------------------------------------------------------------
+[6] PERMISSION: pages_manage_metadata
+Field: "Tell us how you're using this permission or feature"
+--------------------------------------------------------------------------------
+
+omni-channel needs to react to activity on the connected Page in real time so that support agents see new messages and new comments without refreshing.
+
+We use pages_manage_metadata to subscribe the connected Page to our webhook. When the admin connects a Page, the app calls POST /{page-id}/subscribed_apps with the Page access token and subscribes to the messages and feed fields. This is the only use of the permission: the app does not change any other Page setting.
+
+The screencast demonstrates the complete Facebook Login process and the admin connecting their Page, which subscribes the Page to our webhook events.
+
+
+--------------------------------------------------------------------------------
+[7] PERMISSION: pages_messaging
+Field: "Tell us how you're using this permission or feature"
+--------------------------------------------------------------------------------
+
+omni-channel is a shared inbox for customer support. We use pages_messaging so a business can receive the messages customers send to its Facebook Page on Messenger and reply to them from inside our app.
+
+The app retrieves the Page's conversations and messages with GET /{page-id}/conversations and receives new messages through the Messenger webhook. When a support agent writes a reply in the app, we send it with POST /me/messages using the Page access token, so the customer receives it in Messenger.
+
+Every reply is written and sent by a human agent from the app UI. The messages are shown only to the admins of the connected Page; they are not sold, transferred to third parties, or used for advertising.
+
+The screencast demonstrates the complete Facebook Login process, our app sending a message to a Messenger user, and the Messenger client receiving and displaying that message.
+
+
+--------------------------------------------------------------------------------
+[8] NOTES FOR THE REVIEWER
+Field: "Add notes for the reviewer" / "Instructions"
+--------------------------------------------------------------------------------
+
+App URL: https://studio.jts.co.th/demo/
+
+Both the app credentials and a Facebook account that administers our test Page are provided in the Test credentials section of this submission. The Page is a dedicated test Page, so every action you take is safe and affects no real customers.
+
+1. Open https://studio.jts.co.th/demo/ and sign in with the supplied app credentials.
+
+2. Click "+ Add page", then "Continue with Facebook". Sign in with the supplied Facebook account, grant the requested permissions and select the test Page.
+
+3. pages_read_engagement and pages_read_user_content: open the FEED tab, click "+ Add post", paste the URL of the test post listed below and click Import. The app displays the post content (message and image) and, underneath, the comments Facebook users left on it, each tagged "USER COMMENT".
+
+4. pages_manage_engagement: on a visitor comment click Reply, type a message and send it. The comment is published on the Page and appears on the post on facebook.com. You can also Like, Hide/Unhide and Delete the comment; each action is applied to the live Page.
+
+5. Business Asset User Profile Access: open the INBOX tab, then send a message to the test Page on Messenger from any other Facebook account. The app receives it on the "messages" webhook and the conversation appears in the inbox within seconds, identified only as "Customer <PSID>". Open it and press "Sync Profile". The app calls GET /{PSID}?fields=id,name,picture{url} with the Page access token and, when the feature is granted, replaces the PSID with the person's real name and profile picture, badged "Profile fetched via Business Asset User Profile Access".
+
+Note on steps 3 and 5: Business Asset User Profile Access is exactly what we are requesting, so until it is approved the Graph API returns identity fields only for people who have a role on our app.
+
+- In step 5, if you message the Page from an account without a role, the app shows an explanatory notice instead of a name.
+- In step 3, the same gate applies to the "from" field on comments: comments written by people without a role are displayed in full, but their author is labelled "Facebook user" with an "Identity pending review" badge.
+
+Both are the expected pre-approval behaviour, not a malfunction - the comment text itself is read via pages_read_user_content and is displayed correctly. The attached screencast shows both flows completing successfully with an authorised account (PSID 27353747824317636).
+
+
+--------------------------------------------------------------------------------
+[9] DATA HANDLING (Data Use Checkup / security questionnaire)
+--------------------------------------------------------------------------------
+
+How the data is stored:
+Page posts, user comments, Messenger conversations and resolved profile names and photos are stored in the business's own workspace in our database, tied to the connected Page, and are visible only to the Page admins who connected that Page.
+
+Is the data shared with third parties?
+No. The data is not sold, licensed or transferred to any third party, data broker or advertising network.
+
+Is the data used for advertising, profiling or model training?
+No.
+
+Retention and deletion:
+Data is retained only while the Page remains connected. Disconnecting the Page in omni-channel deletes the stored posts, comments and conversations for that Page. Users can also request deletion through the contact address in our Privacy Policy.
+
+
+================================================================================
+SCREENCASTS TO ATTACH
+================================================================================
+pages_read_engagement            ->  final-pages_read_engagement.mp4              (1:30)
+pages_read_user_content          ->  final-pages_read_user_content.mp4            (1:36)
+pages_manage_engagement          ->  final-pages_manage_engagement.mp4            (3:14)
+Business Asset User Profile...   ->  final-business-asset-user-profile-access.mp4 (2:14)
+pages_show_list                  ->  final-pages_read_engagement.mp4 (shows the Page picker)
+pages_manage_metadata            ->  final-pages_read_engagement.mp4 (shows Page connect / webhook subscribe)
+pages_messaging                  ->  final-business-asset-user-profile-access.mp4 (shows the Messenger inbox)

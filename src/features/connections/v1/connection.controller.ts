@@ -72,8 +72,13 @@ export const connectionController = {
 
   getAvailablePages: async <E extends Env, P extends string, I extends Input>(c: Context<E, P, I>) => {
     const token = c.req.query('token')
-    const pages = await connectionService.getAvailablePages(token)
-    return c.json(pages)
+    try {
+      const pages = await connectionService.getAvailablePages(token)
+      return c.json(pages)
+    } catch (error) {
+      const err = error as Error
+      return c.json({ success: false, error: err.message || 'Failed to fetch Facebook Pages' }, 400)
+    }
   },
 
   getConfig: async <E extends Env, P extends string, I extends Input>(c: Context<E, P, I>) => {

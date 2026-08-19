@@ -137,7 +137,7 @@
 
 ```
 🔎 [PROFILE] calling User Profile API (Business Asset User Profile Access)
-    endpoint: https://graph.facebook.com/v25.0/{PSID}?fields=name,profile_pic
+    endpoint: https://graph.facebook.com/v25.0/{PSID}?fields=id,name,picture{url}
 👤 [PROFILE] resolved customer identity via Business Asset User Profile Access
     resolvedName: "<ชื่อจริงของลูกค้า>"  hasPhoto: true
 ```

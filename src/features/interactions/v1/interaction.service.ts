@@ -24,13 +24,20 @@ const HISTORY_LIMIT = 10
 // at the most recent few while still bounding runaway pagination.
 const CONVERSATION_PAGE_LIMIT = 100
 const MAX_CONVERSATION_PAGES = 20
+/** Shown in place of a commenter's name when Graph withholds the comment's `from` field. */
+export const WITHHELD_COMMENTER_NAME = 'Facebook user'
 
 interface IGraphThread {
   snippet?: string
   participants?: { data?: Array<{ id?: string; name?: string }> }
 }
 
-type TSseListener = (data: string) => void
+/**
+ * Listeners receive the Page the event belongs to alongside the payload so each open stream
+ * can drop events for Pages its viewer has not connected. Without this the SSE channel would
+ * quietly re-leak everything the REST endpoints now scope.
+ */
+type TSseListener = (data: string, pageId?: string) => void
 const sseListeners: TSseListener[] = []
 
 export const sseBroker = {
@@ -44,10 +51,12 @@ export const sseBroker = {
     }
   },
 
-  broadcast(event: string, data: object): void {
+  /** `pageId` defaults to the payload's own `pageId`; pass it explicitly for payloads without one. */
+  broadcast(event: string, data: object, pageId?: string): void {
     const payload = JSON.stringify({ event, data })
+    const scope = pageId ?? (data as { pageId?: string }).pageId
     for (const listener of sseListeners) {
-      listener(payload)
+      listener(payload, scope)
     }
   },
 }
@@ -171,24 +180,60 @@ async function resolveImportPostId(input: string, conn: IFbPageConnection): Prom
   return postId
 }
 
+/**
+ * Resolve the Page connection (and therefore the Page access token) for a given pageId.
+ *
+ * There is deliberately NO "first connection" fallback: borrowing another Page's token
+ * both leaks that Page's data and makes Graph calls fail in confusing ways (a PSID is only
+ * resolvable by the Page it messaged). An unknown pageId must surface as "not connected".
+ */
 async function resolveConnection(pageId?: string): Promise<IFbPageConnection | undefined> {
-  if (pageId) {
-    const byPage = await dbService.getConnectionByPageId(pageId)
-    if (byPage) {
-      logToken(
-        { pageId, connId: byPage.id, name: byPage.name, token: tokenForLog(byPage.accessToken) },
-        '🔑 [TOKEN] resolved Page connection token (by pageId)',
-      )
-      return byPage
-    }
+  if (!pageId) {
+    logger.warn('Page connection requested without a pageId; refusing to guess a token')
+    return undefined
   }
-  const conns = await dbService.getConnections()
-  const fallback = conns[0]
+  const byPage = await dbService.getConnectionByPageId(pageId)
+  if (!byPage) {
+    logger.warn({ pageId }, 'No connected Page matches this pageId')
+    return undefined
+  }
   logToken(
-    { requestedPageId: pageId, connId: fallback?.id, name: fallback?.name, token: tokenForLog(fallback?.accessToken) },
-    '🔑 [TOKEN] resolved Page connection token (fallback: first connection)',
+    { pageId, connId: byPage.id, name: byPage.name, token: tokenForLog(byPage.accessToken) },
+    '🔑 [TOKEN] resolved Page connection token (by pageId)',
   )
-  return fallback
+  return byPage
+}
+
+/**
+ * The set of Page ids the signed-in user has actually connected. Every read/write that
+ * touches page-scoped data (conversations, posts, comments) is filtered through this so a
+ * user can never see or act on another workspace's data, and so an App Review reviewer
+ * only ever sees the Page they connected themselves.
+ */
+async function getOwnedPageIds(userId: string): Promise<Set<string>> {
+  const conns = await dbService.getConnectionsByUserId(userId)
+  return new Set(conns.map((c) => c.id))
+}
+
+/**
+ * Narrow a requested pageId to one the user owns. Returns the owned page ids to filter by,
+ * or null when the user explicitly asked for a page that is not theirs (caller returns empty).
+ */
+async function resolveScope(userId: string, pageId?: string): Promise<Set<string> | null> {
+  const owned = await getOwnedPageIds(userId)
+  if (!pageId) {
+    return owned
+  }
+  if (!owned.has(pageId)) {
+    logger.warn({ userId, pageId }, '⛔ [SCOPE] rejected access to a page the user has not connected')
+    return null
+  }
+  return new Set([pageId])
+}
+
+/** Page-scoped records only: anything without a pageId belongs to no workspace and stays hidden. */
+function isOwned(record: { pageId?: string }, owned: Set<string>): boolean {
+  return Boolean(record.pageId && owned.has(record.pageId))
 }
 
 function resolvePersona(conn?: IFbPageConnection): string {
@@ -202,42 +247,107 @@ function toHistory(messages: IMessage[]): IGeminiHistoryItem[] {
   }))
 }
 
+// User fields granted by the Business Asset User Profile Access feature, verbatim from
+// https://developers.facebook.com/docs/features-reference/business-asset-user-profile-access/
+// (`ids_for_business` is omitted: it additionally requires business_management, which we
+// do not request). Kept as the PRIMARY request so the call matches the feature we asked for.
+const PROFILE_FIELDS = 'id,name,picture{url}'
+// Messenger Platform User Profile API fields, granted by `pages_messaging`. Used only as a
+// fallback: mixing them into the primary request means one disallowed field fails the WHOLE
+// request, losing the name we were otherwise entitled to read.
+const MESSENGER_PROFILE_FIELDS = 'first_name,last_name,profile_pic'
+
+interface IGraphError {
+  message?: string
+  code?: number
+  error_subcode?: number
+  type?: string
+}
+
+interface IProfileResult {
+  name?: string
+  profilePic?: string
+  error?: string
+  /** True when Graph refused because the feature/permission is not (yet) granted for this user. */
+  pendingApproval?: boolean
+}
+
+/**
+ * Graph refuses profile reads for two very different reasons and the UI must not conflate them:
+ * a real failure (bad token, network) vs. "this app may not read this person's profile yet",
+ * which is the expected state while Business Asset User Profile Access is still under review —
+ * it resolves only for people with a role on the app until the feature is approved.
+ */
+function isPendingApprovalError(err?: IGraphError): boolean {
+  if (!err) {
+    return false
+  }
+  // code 10 / 200 = permission denied; subcode 33 = node not visible to this token.
+  return err.code === 10 || err.code === 200 || err.error_subcode === 33 || err.type === 'OAuthException'
+}
+
+async function requestProfile(
+  pageAccessToken: string,
+  psid: string,
+  fields: string,
+): Promise<{ data?: Record<string, unknown>; error?: IGraphError; reason?: string }> {
+  // Log the exact endpoint (token redacted) so the profile fetch is visible in the server
+  // logs / terminal — useful evidence when demoing this permission for App Review.
+  logger.info(
+    { endpoint: `${GRAPH}/${psid}?fields=${fields}` },
+    '🔎 [PROFILE] calling User Profile API (Business Asset User Profile Access)',
+  )
+  const res = await fetch(`${GRAPH}/${psid}?fields=${encodeURIComponent(fields)}&access_token=${pageAccessToken}`)
+  const data = (await res.json()) as Record<string, unknown> & { error?: IGraphError }
+  if (!res.ok || data.error) {
+    const reason = data.error?.message ?? `HTTP ${res.status}`
+    const subcode = data.error?.error_subcode
+    logger.warn(
+      { psid, fields, code: data.error?.code, subcode, reason },
+      'Could not fetch customer profile (Business Asset User Profile Access)',
+    )
+    return { error: data.error ?? {}, reason: subcode ? `${reason} (subcode ${subcode})` : reason }
+  }
+  return { data }
+}
+
 /**
  * Fetch a Messenger customer's public profile (display name + profile picture) from the
  * Graph API using the page access token. This relies on Business Asset User Profile Access,
  * which grants the app the name and profile photo of users who message the connected Page.
- * Returns an empty object on any failure so the inbox falls back to a generated avatar.
+ *
+ * Two requests, never one: the documented feature fields first, then the Messenger-specific
+ * fields only if the first call came back without a picture. Returns `pendingApproval` so the
+ * inbox can explain an unapproved feature instead of showing a generic failure.
  */
-async function fetchUserProfile(
-  pageAccessToken: string,
-  psid: string,
-): Promise<{ name?: string; profilePic?: string; error?: string }> {
-  // Log the exact endpoint (token redacted) so the profile fetch is visible in the server
-  // logs / terminal — useful evidence when demoing this permission for App Review.
-  logger.info(
-    { endpoint: `${GRAPH}/${psid}?fields=name,profile_pic` },
-    '🔎 [PROFILE] calling User Profile API (Business Asset User Profile Access)',
-  )
+async function fetchUserProfile(pageAccessToken: string, psid: string): Promise<IProfileResult> {
   logToken({ psid, token: tokenForLog(pageAccessToken) }, '🔑 [TOKEN] Page token used for profile fetch')
   try {
-    const res = await fetch(`${GRAPH}/${psid}?fields=name,profile_pic&access_token=${pageAccessToken}`)
-    const data = (await res.json()) as {
-      error?: { message?: string; code?: number; error_subcode?: number }
-      name?: string
-      profile_pic?: string
+    const primary = await requestProfile(pageAccessToken, psid, PROFILE_FIELDS)
+    const name = primary.data?.name as string | undefined
+    const picture = (primary.data?.picture as { data?: { url?: string } } | undefined)?.data?.url
+
+    if (name && picture) {
+      return { name, profilePic: picture }
     }
-    if (!res.ok || data.error) {
-      // Surface the real Graph reason (message + subcode) so we can tell WHY a given PSID
-      // won't resolve — e.g. subcode 33 = not visible to this Page token / not opted in.
-      const reason = data.error?.message ?? `HTTP ${res.status}`
-      const subcode = data.error?.error_subcode
-      logger.warn(
-        { psid, code: data.error?.code, subcode, reason },
-        'Could not fetch customer profile (Business Asset User Profile Access)',
-      )
-      return { error: subcode ? `${reason} (subcode ${subcode})` : reason }
+
+    // Either the feature fields were refused, or they resolved without a usable photo.
+    const fallback = await requestProfile(pageAccessToken, psid, MESSENGER_PROFILE_FIELDS)
+    const first = fallback.data?.first_name as string | undefined
+    const last = fallback.data?.last_name as string | undefined
+    const messengerName = [first, last].filter(Boolean).join(' ') || undefined
+    const profilePic = (fallback.data?.profile_pic as string | undefined) ?? picture
+    const resolvedName = name ?? messengerName
+
+    if (resolvedName || profilePic) {
+      return { name: resolvedName, profilePic }
     }
-    return { name: data.name, profilePic: data.profile_pic }
+
+    const err = primary.error ?? fallback.error
+    return {
+      error: primary.reason ?? fallback.reason ?? 'Graph API returned no profile fields',
+      pendingApproval: isPendingApprovalError(err),
+    }
   } catch (error) {
     logger.warn({ err: error, psid }, 'Failed to fetch customer profile from Graph API')
     return { error: 'Failed to reach the Graph API' }
@@ -296,6 +406,7 @@ async function syncPostComments(postId: string, conn: IFbPageConnection): Promis
     parentId?: string | null
     avatarUrl?: string
     fromId?: string
+    identityWithheld?: boolean
   }> = []
 
   let next: string | null =
@@ -321,14 +432,19 @@ async function syncPostComments(postId: string, conn: IFbPageConnection): Promis
       if (!cm.message) {
         continue
       }
+      // `from` carries the commenter's User fields, which Business Asset User Profile Access
+      // governs exactly as it governs a Messenger PSID. Graph omits it for people with no role
+      // on the app until the feature is approved — record that rather than inventing a name.
+      const identityWithheld = !cm.from?.name
       incoming.push({
         id: cm.id,
-        senderName: cm.from?.name || 'User',
+        senderName: cm.from?.name || WITHHELD_COMMENTER_NAME,
         text: cm.message,
         parentId: cm.parent?.id ?? null,
         avatarUrl: cm.from?.picture?.data?.url,
         fromId: cm.from?.id,
         timestamp: cm.created_time,
+        identityWithheld,
       })
     }
     next = data.paging?.next ?? null
@@ -396,26 +512,45 @@ async function seedThreadsPage(
 }
 
 export const interactionService = {
-  async listConversations(): Promise<IConversation[]> {
-    return interactionRepository.listConversations()
+  /** The Page ids this user has connected — the filter every page-scoped read applies. */
+  async listOwnedPageIds(userId: string): Promise<Set<string>> {
+    return getOwnedPageIds(userId)
   },
 
-  async getConversation(id: string): Promise<IConversation | null> {
-    return interactionRepository.getConversation(id)
+  /** Conversations for the Pages this user connected — never the whole inbox bucket. */
+  async listConversations(userId: string, pageId?: string): Promise<IConversation[]> {
+    const scope = await resolveScope(userId, pageId)
+    if (!scope || scope.size === 0) {
+      return []
+    }
+    const all = await interactionRepository.listConversations()
+    return all.filter((c) => isOwned(c, scope))
+  },
+
+  async getConversation(userId: string, id: string): Promise<IConversation | null> {
+    const conv = await interactionRepository.getConversation(id)
+    if (!conv) {
+      return null
+    }
+    const owned = await getOwnedPageIds(userId)
+    return isOwned(conv, owned) ? conv : null
   },
 
   /**
    * Clear inbox conversations. With a pageId only that page's conversations are removed;
-   * without one the whole inbox is wiped. Broadcasts so open clients refresh their list.
+   * without one every Page the user connected is cleared. Conversations belonging to other
+   * users' Pages are never touched. Broadcasts so open clients refresh their list.
    */
-  async clearConversations(pageId?: string): Promise<{ cleared: number }> {
-    let cleared = -1
-    if (pageId) {
-      cleared = await dbService.deleteConversationsByPageId(pageId)
-    } else {
-      await dbService.clearConversations()
+  async clearConversations(userId: string, pageId?: string): Promise<{ cleared: number }> {
+    const scope = await resolveScope(userId, pageId)
+    if (!scope || scope.size === 0) {
+      return { cleared: 0 }
     }
-    logger.info({ pageId: pageId ?? 'all', cleared }, '🧹 [INBOX] conversations cleared')
+    let cleared = 0
+    for (const id of scope) {
+      cleared += await dbService.deleteConversationsByPageId(id)
+    }
+    logger.info({ pageIds: [...scope], cleared }, '🧹 [INBOX] conversations cleared')
     sseBroker.broadcast('conversations_cleared', { pageId })
     return { cleared }
   },
@@ -427,12 +562,20 @@ export const interactionService = {
    * inbox — useful to demonstrate the permission on demand for App Review.
    */
   async syncConversationProfile(
+    userId: string,
     id: string,
-  ): Promise<{ conversation: IConversation | null; profileFetched: boolean; error?: string }> {
-    const conv = await interactionRepository.getConversation(id)
+  ): Promise<{
+    conversation: IConversation | null
+    profileFetched: boolean
+    error?: string
+    pendingApproval?: boolean
+  }> {
+    const conv = await interactionService.getConversation(userId, id)
     if (!conv) {
       return { conversation: null, profileFetched: false, error: 'Conversation not found' }
     }
+    // Strictly the Page this conversation belongs to — a PSID is only resolvable by the Page
+    // the person messaged, so borrowing any other token would fail (or leak) rather than help.
     const conn = await resolveConnection(conv.pageId)
     if (!conn?.accessToken) {
       return { conversation: conv, profileFetched: false, error: 'No connected Page token available' }
@@ -447,6 +590,7 @@ export const interactionService = {
       return {
         conversation: conv,
         profileFetched: false,
+        pendingApproval: profile.pendingApproval,
         error: profile.error ?? 'Graph API returned no profile for this customer',
       }
     }
@@ -470,9 +614,20 @@ export const interactionService = {
    * callback URL is bound to production.
    */
   async importConversationsFromPage(
+    userId: string,
     pageId?: string,
   ): Promise<{ imported: number; skipped?: number; conversations: IConversation[]; error?: string }> {
-    const conn = await resolveConnection(pageId)
+    const scope = await resolveScope(userId, pageId)
+    if (!scope || scope.size === 0) {
+      return { imported: 0, conversations: [], error: 'Connect a Facebook Page first, then load its conversations.' }
+    }
+    // Import always targets one specific Page; without an explicit pageId use the only one
+    // the user has connected rather than guessing between several.
+    const targetPageId = pageId ?? (scope.size === 1 ? [...scope][0] : undefined)
+    if (!targetPageId) {
+      return { imported: 0, conversations: [], error: 'Select which Page to load conversations from.' }
+    }
+    const conn = await resolveConnection(targetPageId)
     if (!conn?.accessToken) {
       return { imported: 0, conversations: [], error: 'No connected Page token available' }
     }
@@ -609,8 +764,8 @@ export const interactionService = {
     }
   },
 
-  async replyToMessage(payload: TMessageReplyPayload): Promise<IConversation | null> {
-    const conv = await interactionRepository.getConversation(payload.conversationId)
+  async replyToMessage(userId: string, payload: TMessageReplyPayload): Promise<IConversation | null> {
+    const conv = await interactionService.getConversation(userId, payload.conversationId)
     if (!conv) {
       return null
     }
@@ -638,17 +793,32 @@ export const interactionService = {
     return updated
   },
 
-  async listPosts(): Promise<IPost[]> {
-    return interactionRepository.listPosts()
+  /** Feed posts for the Pages this user connected — never the whole posts bucket. */
+  async listPosts(userId: string, pageId?: string): Promise<IPost[]> {
+    const scope = await resolveScope(userId, pageId)
+    if (!scope || scope.size === 0) {
+      return []
+    }
+    const all = await interactionRepository.listPosts()
+    return all.filter((p) => isOwned(p, scope))
   },
 
-  async getPost(id: string): Promise<IPost | null> {
-    return interactionRepository.getPost(id)
+  async getPost(userId: string, id: string): Promise<IPost | null> {
+    const post = await interactionRepository.getPost(id)
+    if (!post) {
+      return null
+    }
+    const owned = await getOwnedPageIds(userId)
+    return isOwned(post, owned) ? post : null
   },
 
-  async deletePost(id: string): Promise<void> {
+  async deletePost(userId: string, id: string): Promise<void> {
+    const post = await interactionService.getPost(userId, id)
+    if (!post) {
+      return
+    }
     await interactionRepository.deletePost(id)
-    sseBroker.broadcast('posts_updated', { id, deleted: true })
+    sseBroker.broadcast('posts_updated', { id, deleted: true }, post.pageId)
   },
 
   /**
@@ -656,8 +826,16 @@ export const interactionService = {
    * content and its comments, then stores them locally (deduped). Lets admins pull a
    * specific post into the system without waiting for webhooks.
    */
-  async importPost(input: string, pageId?: string): Promise<IPost> {
-    const conn = await resolveConnection(pageId)
+  async importPost(userId: string, input: string, pageId?: string): Promise<IPost> {
+    const scope = await resolveScope(userId, pageId)
+    if (!scope || scope.size === 0) {
+      throw new Error('Connect a Facebook Page first, then import one of its posts.')
+    }
+    const targetPageId = pageId ?? (scope.size === 1 ? [...scope][0] : undefined)
+    if (!targetPageId) {
+      throw new Error('Select which Page to import this post into.')
+    }
+    const conn = await resolveConnection(targetPageId)
     if (!conn?.accessToken) {
       throw new Error('No connected page with a valid access token')
     }
@@ -706,8 +884,8 @@ export const interactionService = {
    * Re-sync an already-imported post: pull the latest comments and replies from
    * Facebook and merge new ones in. Returns null if the post isn't in the system.
    */
-  async syncPost(id: string): Promise<IPost | null> {
-    const post = await interactionRepository.getPost(id)
+  async syncPost(userId: string, id: string): Promise<IPost | null> {
+    const post = await interactionService.getPost(userId, id)
     if (!post) {
       return null
     }
@@ -829,9 +1007,12 @@ export const interactionService = {
    * Hide/unhide a comment via the Graph API (is_hidden). A hidden comment is invisible
    * to the public but still visible to the Page admin. Also updates the local copy.
    */
-  async hideComment(postId: string, commentId: string, hidden: boolean): Promise<IPost | null> {
-    const post = await interactionRepository.getPost(postId)
-    const conn = await resolveConnection(post?.pageId)
+  async hideComment(userId: string, postId: string, commentId: string, hidden: boolean): Promise<IPost | null> {
+    const post = await interactionService.getPost(userId, postId)
+    if (!post) {
+      return null
+    }
+    const conn = await resolveConnection(post.pageId)
     if (conn?.accessToken) {
       const res = await fetch(`${GRAPH}/${commentId}?is_hidden=${hidden}&access_token=${conn.accessToken}`, {
         method: 'POST',
@@ -855,10 +1036,13 @@ export const interactionService = {
    * comment's `likes` edge). Requires `pages_manage_engagement`. Also mirrors the state
    * on the local copy so the dashboard reflects the page's reaction.
    */
-  async likeComment(payload: TLikeCommentPayload): Promise<IPost | null> {
+  async likeComment(userId: string, payload: TLikeCommentPayload): Promise<IPost | null> {
     const { postId, commentId, liked } = payload
-    const post = await interactionRepository.getPost(postId)
-    const conn = await resolveConnection(post?.pageId)
+    const post = await interactionService.getPost(userId, postId)
+    if (!post) {
+      return null
+    }
+    const conn = await resolveConnection(post.pageId)
     if (conn?.accessToken) {
       const res = await fetch(`${GRAPH}/${commentId}/likes?access_token=${conn.accessToken}`, {
         method: liked ? 'POST' : 'DELETE',
@@ -881,10 +1065,13 @@ export const interactionService = {
    * Requires `pages_manage_engagement`. Facebook removes the comment's replies too, so
    * the local copy drops the comment and any replies threaded under it.
    */
-  async deleteComment(payload: TDeleteCommentPayload): Promise<IPost | null> {
+  async deleteComment(userId: string, payload: TDeleteCommentPayload): Promise<IPost | null> {
     const { postId, commentId } = payload
-    const post = await interactionRepository.getPost(postId)
-    const conn = await resolveConnection(post?.pageId)
+    const post = await interactionService.getPost(userId, postId)
+    if (!post) {
+      return null
+    }
+    const conn = await resolveConnection(post.pageId)
     // Only real Facebook comments ({page}_{id} style) exist on Graph; local-only page
     // replies are just removed from the dashboard.
     if (conn?.accessToken && commentId.includes('_')) {
@@ -904,9 +1091,12 @@ export const interactionService = {
     return updated ?? null
   },
 
-  async replyToComment(payload: TCommentReplyPayload): Promise<IComment | null> {
-    const post = await interactionRepository.getPost(payload.postId)
-    const conn = await resolveConnection(post?.pageId)
+  async replyToComment(userId: string, payload: TCommentReplyPayload): Promise<IComment | null> {
+    const post = await interactionService.getPost(userId, payload.postId)
+    if (!post) {
+      return null
+    }
+    const conn = await resolveConnection(post.pageId)
     // Reply to a specific comment when commentId is given, else comment on the post.
     const target = payload.commentId || payload.postId
     if (conn?.accessToken) {

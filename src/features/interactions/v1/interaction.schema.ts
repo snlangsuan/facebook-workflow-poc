@@ -49,6 +49,8 @@ export const customerCommentPayloadSchema = z.object({
   commentId: z.string().optional(),
   parentId: z.string().nullable().optional(),
   pageId: z.string().optional(),
+  // Set when the webhook delivered the comment without a `from` — see IComment.identityWithheld.
+  identityWithheld: z.boolean().optional(),
 })
 
 export const customerPostPayloadSchema = z.object({

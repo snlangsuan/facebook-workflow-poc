@@ -116,12 +116,20 @@ export const connectionService = {
     shortLivedUserToken?: string,
   ): Promise<Array<{ id: string; name: string; accessToken: string }>> {
     if (!shortLivedUserToken) {
-      return []
+      throw new Error('Missing Facebook user access token.')
     }
 
     try {
       const longLivedUserToken = await connectionService.exchangeForLongLivedUserToken(shortLivedUserToken)
-      const userToken = longLivedUserToken || shortLivedUserToken
+      // Page tokens inherit the lifetime of the user token they were derived from. Falling back
+      // to the short-lived token silently yields Page tokens that die in ~1-2 hours, which shows
+      // up much later as every Graph call failing — refuse instead of storing a doomed token.
+      if (!longLivedUserToken) {
+        throw new Error(
+          'Could not obtain a long-lived Facebook token. Check that FACEBOOK_APP_SECRET is set correctly for this app.',
+        )
+      }
+      const userToken = longLivedUserToken
       logToken(
         {
           isLongLived: Boolean(longLivedUserToken),
@@ -155,13 +163,15 @@ export const connectionService = {
       }))
     } catch (error) {
       logger.error(error, 'Graph API accounts lookup failure')
-      return []
+      // Surface the reason: an empty page picker with no explanation is indistinguishable
+      // from "this account manages no Pages".
+      throw error instanceof Error ? error : new Error('Failed to fetch Facebook accounts')
     }
   },
 
   async exchangeForLongLivedUserToken(shortLivedUserToken: string): Promise<string | null> {
     if (!envVariables.FACEBOOK_APP_SECRET || envVariables.FACEBOOK_APP_SECRET === '<secret>') {
-      logger.warn('FACEBOOK_APP_SECRET not configured; skipping long-lived token exchange')
+      logger.error('FACEBOOK_APP_SECRET not configured; Page tokens would be short-lived and expire within hours')
       return null
     }
     try {

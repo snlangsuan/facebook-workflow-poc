@@ -477,17 +477,25 @@
     }
 
     async function checkFacebookConnection() {
+      let loadFailed = false;
       try {
         const res = await apiFetch(`/api/v1/connections/${currentUserId}`);
-        const list = res.ok ? await res.json() : [];
+        if (!res.ok) throw new Error('Could not load your connected Pages.');
+        const list = await res.json();
         connectedPages = Array.isArray(list) ? list : [];
       } catch (error) {
+        // Distinguish "nothing connected yet" from "we could not ask" — silently showing the
+        // empty state makes a transient backend error look like a lost Page connection.
         connectedPages = [];
+        loadFailed = true;
       }
       // Always enter the dashboard — no page connected is a valid (empty) state.
       // Facebook login only happens when the user clicks "+ Add page".
       connectedPage = connectedPages[0] || null;
       setupDashboard();
+      if (loadFailed) {
+        showAlertDialog('Could Not Load Pages', 'We could not load your connected Facebook Pages. Your connection has not been removed — please reload the page and try again.');
+      }
     }
 
     function showPageConnectionWizard() {
@@ -532,10 +540,16 @@
 
       try {
         const res = await apiFetch(`/api/v1/connections/pages?token=${token}`);
-        availablePages = await res.json();
+        const body = await res.json();
+        // The endpoint now reports WHY it failed (bad app secret, Graph error) instead of
+        // returning an empty list that reads as "you manage no Pages".
+        if (!res.ok || !Array.isArray(body)) {
+          throw new Error(body?.error || 'Failed to fetch pages.');
+        }
+        availablePages = body;
         renderWizardPages();
       } catch (err) {
-        container.innerHTML = '<div class="text-center text-red-400">Failed to fetch pages.</div>';
+        container.innerHTML = `<div class="text-center text-red-400 text-sm leading-relaxed px-4">${err.message || 'Failed to fetch pages.'}</div>`;
       }
     }
 
@@ -704,6 +718,32 @@
       return id
         ? `https://graph.facebook.com/${fbGraphVersion}/${id}/picture?type=square&width=80&height=80`
         : '';
+    }
+
+    // The server already scopes every list to the Pages this user connected; sending the
+    // active pageId narrows it further to the Page shown in the sidebar.
+    function activePageQuery() {
+      return connectedPage ? `?pageId=${encodeURIComponent(connectedPage.id)}` : '';
+    }
+
+    // An empty inbox is the normal state for a freshly connected Page — say what to do next
+    // instead of leaving a blank column that reads as a broken app. Conversations arrive on
+    // the `messages` webhook, so no action is needed here beyond messaging the Page.
+    function renderInboxEmptyState(list) {
+      if (list.length > 0 || !connectedPage) return;
+      const container = document.getElementById('listContent');
+      container.innerHTML = `
+        <div class="px-4 py-8 text-center flex flex-col gap-2">
+          <p class="text-sm font-medium text-slate-300">Waiting for messages</p>
+          <p class="text-xs text-slate-500 leading-relaxed">
+            Send a message to <span class="text-slate-300">${connectedPage.name}</span> on Messenger
+            from another Facebook account — it appears here automatically, no refresh needed.
+          </p>
+          <p class="text-xxs text-slate-600 leading-relaxed">
+            Older threads sent before the Page was connected can be pulled in with
+            <span class="text-cyan-300">Load from Page</span>.
+          </p>
+        </div>`;
     }
 
     function filterByActivePage(items) {
@@ -921,8 +961,9 @@
 
     async function fetchConversationsList(shouldResetWorkspace = true) {
       try {
-        const res = await apiFetch('/api/v1/interactions/conversations');
+        const res = await apiFetch(`/api/v1/interactions/conversations${activePageQuery()}`);
         const list = filterByActivePage(await res.json());
+        renderInboxEmptyState(list);
 
         const container = document.getElementById('listContent');
         container.innerHTML = '';
@@ -1108,7 +1149,11 @@
             showAlertDialog('Load Warning', data.error);
           } else {
             const skippedNote = data.skipped ? ` (${data.skipped} skipped due to errors)` : '';
-            showAlertDialog('Conversations Loaded', `Imported ${data.imported} conversation(s) from the Page${skippedNote}. Open one and press "Sync Profile" to fetch the customer's name & photo.`);
+            if (data.imported === 0) {
+              showAlertDialog('No New Conversations', `No new Messenger threads were found for this Page${skippedNote}.\n\nSend a message to the Page from another Facebook account, then press "Load from Page" again.`);
+            } else {
+              showAlertDialog('Conversations Loaded', `Imported ${data.imported} conversation(s) from the Page${skippedNote}. Open one and press "Sync Profile" to fetch the customer's name & photo.`);
+            }
           }
         } catch (err) {
           showAlertDialog('Load Failed', err.message);
@@ -1158,7 +1203,18 @@
           renderOpenConversation(data.conversation);
           fetchConversationsList(false);
           if (!data.profileFetched) {
-            showAlertDialog('Profile Not Updated', data.error || 'The Graph API did not return a profile for this customer.');
+            // Until Business Asset User Profile Access is approved, Graph resolves a PSID only
+            // for people with a role on the app — an expected state, not a malfunction.
+            if (data.pendingApproval) {
+              showAlertDialog(
+                'Profile Access Pending Review',
+                'Resolving this customer\'s name and photo requires the Business Asset User Profile Access feature, which is currently under App Review.\n\n' +
+                'Until it is approved the Graph API returns profile data only for people who have a role on this app, so the conversation keeps showing the page-scoped ID (PSID).\n\n' +
+                `Graph API said: ${data.error || 'permission denied'}`
+              );
+            } else {
+              showAlertDialog('Profile Not Updated', data.error || 'The Graph API did not return a profile for this customer.');
+            }
           }
         } catch (err) {
           showAlertDialog('Sync Failed', err.message);
@@ -1168,7 +1224,7 @@
 
     async function fetchPostsList(shouldResetWorkspace = true) {
       try {
-        const res = await apiFetch('/api/v1/interactions/posts');
+        const res = await apiFetch(`/api/v1/interactions/posts${activePageQuery()}`);
         const list = filterByActivePage(await res.json());
 
         const container = document.getElementById('listContent');
@@ -1283,6 +1339,12 @@
         // Page-side replies show the page's profile image + page name (with the actor tag).
         const usePage = isPage && connectedPage;
         const displayName = usePage ? connectedPage.name : c.senderName;
+        // Graph returned the comment but withheld its author. Say so, rather than letting the
+        // placeholder read as the person's real name — it is the same Business Asset User
+        // Profile Access gate that the inbox's Sync Profile reports.
+        const identityBadge = (!isPage && c.identityWithheld)
+          ? `<span title="Facebook did not return this commenter's name or photo. Reading it requires the Business Asset User Profile Access feature, which is pending App Review; until then it resolves only for people with a role on this app." class="text-[8px] font-bold tracking-wider uppercase text-amber-300/90 bg-amber-500/10 border border-amber-500/25 rounded px-1.5 py-0.5 flex items-center gap-1"><svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>Identity pending review</span>`
+          : '';
         const fallbackAvatar = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(displayName)}`;
         const avatar = usePage ? pageAvatarUrl() : (c.avatarUrl || fallbackAvatar);
         // Hide/unhide only works on comments made by OTHER users — Facebook rejects
@@ -1313,8 +1375,9 @@
               <div class="flex-1 min-w-0">
                 <div class="flex justify-between items-center gap-2">
                   <div class="flex items-center gap-2 min-w-0">
-                    <span class="text-xs font-semibold text-slate-300 truncate">${displayName}</span>
+                    <span class="text-xs font-semibold ${(!isPage && c.identityWithheld) ? 'text-slate-500 italic' : 'text-slate-300'} truncate">${displayName}</span>
                     ${tag}
+                    ${identityBadge}
                     ${hiddenBadge}
                     ${likedBadge}
                   </div>

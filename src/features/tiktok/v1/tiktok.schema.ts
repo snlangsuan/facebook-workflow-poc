@@ -22,3 +22,14 @@ export const tiktokConnectionResponseSchema = z.object({
   avatarUrl: z.string().optional(),
   scope: z.string().optional(),
 })
+
+// Event envelope TikTok POSTs to our webhook URL. TikTok sends a flat object;
+// `content` is a JSON-encoded string whose shape depends on `event`
+// (e.g. "authorization.removed", "video.publish.complete").
+export const tiktokWebhookEventSchema = z.object({
+  client_key: z.string().optional(),
+  event: z.string(),
+  create_time: z.number().optional(),
+  user_openid: z.string().optional(),
+  content: z.string().optional(),
+})

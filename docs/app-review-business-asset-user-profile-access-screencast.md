@@ -5,7 +5,7 @@
 > เป้าหมายของวิดีโอ: แสดงให้ reviewer เห็นว่าแอพใช้ permission นี้เพื่ออะไร — เมื่อ **ลูกค้าจริงทักแชทเข้ามาที่ Page ผ่าน Messenger** แอพจะดึง **ชื่อจริง + รูปโปรไฟล์** ของลูกค้าจาก Graph API มาแสดงในหน้า Inbox เพื่อให้แอดมิน/ทีม customer support รู้ว่ากำลังคุยกับใคร (use case: ระบบตอบแชท/CRM ของธุรกิจ)
 
 **หลักฐานหลักในโค้ด:** [interaction.service.ts:191-217](../src/features/interactions/v1/interaction.service.ts#L191-L217) เรียก
-`GET /{PSID}?fields=name,profile_pic&access_token={pageAccessToken}` แล้วนำผลไปแสดงบน Inbox
+`GET /{PSID}?fields=id,name,picture{url}&access_token={pageAccessToken}` แล้วนำผลไปแสดงบน Inbox
 
 ---
 
@@ -86,7 +86,7 @@
 ```
 💬 [WORKER] processing message
 🔎 [PROFILE] calling User Profile API (Business Asset User Profile Access)
-    endpoint: https://graph.facebook.com/v25.0/{PSID}?fields=name,profile_pic
+    endpoint: https://graph.facebook.com/v25.0/{PSID}?fields=id,name,picture{url}
 👤 [PROFILE] resolved customer identity via Business Asset User Profile Access
     resolvedName: "<ชื่อจริงของลูกค้า>"  hasPhoto: true
 ```
@@ -94,10 +94,10 @@
 > **สำคัญ (ยืนยันจากการทดสอบจริง):** บรรทัด `👤 ... resolved customer identity` จะขึ้น **เฉพาะเมื่อ fetch สำเร็จ** เท่านั้น — ต้องเป็นข้อความจากลูกค้าจริง + Page token ที่ valid + permission ได้รับอนุมัติ/บัญชีลูกค้าเป็น Tester ของแอพ ถ้าเงื่อนไขไม่ครบ log จะขึ้นเป็น `⚠️ Could not fetch customer profile (... error_subcode: 33)` แทน และแอพจะ fallback ไป avatar ที่ generate เอง (badge จะไม่ขึ้น) — จึง **ต้องเทสต์ให้ขึ้นบรรทัด 👤 ก่อนเริ่มอัดจริง**
 
 **บทพากย์ (ไทย):**
-> "ทันทีที่ข้อความเข้ามา แอพเรียก Graph API ด้วย Business Asset User Profile Access เพื่อดึงชื่อและรูปโปรไฟล์ของลูกค้าจาก PSID อย่างที่เห็นใน log ตรงนี้ครับ endpoint คือ fields=name,profile_pic และผลลัพธ์คือชื่อจริงของลูกค้า"
+> "ทันทีที่ข้อความเข้ามา แอพเรียก Graph API ด้วย Business Asset User Profile Access เพื่อดึงชื่อและรูปโปรไฟล์ของลูกค้าจาก PSID อย่างที่เห็นใน log ตรงนี้ครับ endpoint คือ fields=id,name,picture{url} และผลลัพธ์คือชื่อจริงของลูกค้า"
 
 **English caption:**
-> "As soon as the message arrives, the app calls the Graph API using Business Asset User Profile Access to resolve the customer's name and profile photo from their PSID. You can see the exact endpoint (`fields=name,profile_pic`) and the resolved real name in the server log."
+> "As soon as the message arrives, the app calls the Graph API using Business Asset User Profile Access to resolve the customer's name and profile photo from their PSID. You can see the exact endpoint (`fields=id,name,picture{url}`) and the resolved real name in the server log."
 
 **สิ่งที่ต้องเห็นชัด:** ทั้งสามบรรทัด log โดยเฉพาะบรรทัด `👤 [PROFILE] resolved customer identity` ที่มีชื่อจริง
 

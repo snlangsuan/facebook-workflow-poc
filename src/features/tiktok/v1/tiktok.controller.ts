@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto'
 
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 
-import { tiktokConnectionResponseSchema } from '#/features/tiktok/v1/tiktok.schema'
+import { logger } from '#/common/libs/logger.lib'
+import { tiktokConnectionResponseSchema, tiktokWebhookEventSchema } from '#/features/tiktok/v1/tiktok.schema'
 import { tiktokService } from '#/features/tiktok/v1/tiktok.service'
 
 import type { TTiktokCallbackQuery } from '#/features/tiktok/v1/tiktok.type'
@@ -89,6 +90,38 @@ export const tiktokController = {
       return c.json({ success: false, error: 'Missing open id' }, 400)
     }
     await tiktokService.disconnect(openId)
+    return c.json({ success: true })
+  },
+
+  webhook: async <E extends Env, P extends string, I extends Input>(c: Context<E, P, I>) => {
+    // Read the raw body first so the TikTok-Signature can be verified against the exact bytes.
+    const rawBody = await c.req.text()
+    const sig = tiktokService.verifyWebhookSignature(rawBody, c.req.header('tiktok-signature'))
+
+    if (!sig.valid) {
+      logger.warn({ reason: sig.reason, preview: rawBody.slice(0, 400) }, '❌ [TIKTOK] webhook signature INVALID (401)')
+      return c.json({ success: false, error: 'Invalid signature' }, 401)
+    }
+
+    let json: unknown
+    try {
+      json = JSON.parse(rawBody || '{}')
+    } catch {
+      logger.warn({ preview: rawBody.slice(0, 400) }, '⚠️ [TIKTOK] webhook invalid JSON (400)')
+      return c.json({ success: false, error: 'Invalid JSON payload' }, 400)
+    }
+
+    const parsed = tiktokWebhookEventSchema.safeParse(json)
+    if (!parsed.success) {
+      logger.warn({ preview: rawBody.slice(0, 400) }, '⚠️ [TIKTOK] webhook payload not recognised (400)')
+      return c.json({ success: false, error: 'Unknown event payload' }, 400)
+    }
+
+    logger.info(
+      { event: parsed.data.event, openId: parsed.data.user_openid, signatureValid: sig.valid },
+      '📥 [TIKTOK] webhook received',
+    )
+    await tiktokService.handleWebhookEvent(parsed.data)
     return c.json({ success: true })
   },
 }

@@ -55,3 +55,16 @@ export const disconnectTiktokSpec = describeRoute({
     },
   },
 })
+
+export const tiktokWebhookSpec = describeRoute({
+  tags: ['TikTok'],
+  summary: 'Receive TikTok webhook events (authorization.removed, etc.)',
+  responses: {
+    200: {
+      description: 'Event acknowledged',
+    },
+    401: {
+      description: 'Invalid webhook signature',
+    },
+  },
+})
